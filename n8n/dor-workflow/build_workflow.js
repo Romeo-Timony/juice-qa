@@ -210,11 +210,37 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       webhookId: crypto.randomUUID()
     },
     {
+      parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 1 }] } },
+      name: 'Расписание: Проверка задач (1 мин)',
+      type: 'n8n-nodes-base.scheduleTrigger',
+      typeVersion: 1.1,
+      position: [0, 320]
+    },
+    {
+      parameters: {
+        authentication: 'predefinedCredentialType',
+        nodeCredentialType: 'jiraSoftwareCloudApi',
+        url: '={{ $json.config.jiraBase }}/rest/api/3/search',
+        sendQuery: true,
+        queryParameters: {
+          parameters: [
+            { name: 'jql', value: pollJql },
+            { name: 'fields', value: 'summary,status,assignee' }
+          ]
+        },
+        options: {}
+      },
+      name: 'Jira: Найти задачи В работе',
+      type: 'n8n-nodes-base.httpRequest',
+      typeVersion: 4.2,
+      position: [240, 320]
+    },
+    {
       parameters: {},
       name: 'Execute Workflow Trigger',
       type: 'n8n-nodes-base.executeWorkflowTrigger',
       typeVersion: 1,
-      position: [0, 320]
+      position: [0, 500]
     },
 
     // 2. Проверка готовности (DoR)
@@ -469,6 +495,9 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
   const link = (...targets) => ({ main: targets.map(t => (t ? [].concat(t).map(node => ({ node, type: 'main', index: 0 })) : [])) })
   const connections = {
     'Webhook: События Qase TMS': link('Синхронизация удаленных тестов (Drift)'),
+    
+    'Расписание: Проверка задач (1 мин)': link('Jira: Найти задачи В работе'),
+    'Jira: Найти задачи В работе': link('Фильтр: Задача взята в работу'),
     
     'Jira: Перехват обновления задачи': link('Фильтр: Задача взята в работу'),
     'Execute Workflow Trigger': link('Фильтр: Задача взята в работу'),
