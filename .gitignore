@@ -1,0 +1,20 @@
+# Environment & Secrets
+.env
+*.env
+n8n/dor-workflow/.deploy-state.json
+
+# Python & Virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Pytest & Cache
+.pytest_cache/
+
+# Test Reports & Artifacts
+allure-results/
+allure-report/
+*.webm

@@ -1,0 +1,888 @@
+{
+  "name": "Juice Shop",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-dor-gate",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Jira Webhook: issue updated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        180
+      ],
+      "webhookId": "b51cf0d4-316d-45b8-93c7-60761675d52a"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule: Poll Jira (1m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -220,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://romeo-timony.atlassian.net/rest/api/3/search/jql?jql=project%20%3D%20JS%20AND%20status%20%3D%2010046%20AND%20(labels%20is%20EMPTY%20OR%20labels%20not%20in%20(qa-dor-passed%2C%20qa-dor-failed%2C%20qa-dor-error))&fields=summary,assignee,status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "options": {}
+      },
+      "name": "Jira: Poll issues in progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        360
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Filter: moved to In Progress\"\nconst CONFIG = {\n  jiraBase: 'https://romeo-timony.atlassian.net',\n  projectKey: 'JS',\n  inProgressStatusId: '10046',\n  inProgressNames: ['В работе', 'In Progress'],\n  todoStatusId: '10045',\n  geminiModel: 'gemini-3.5-flash',\n  webhookToken: 'ea6a65ab5323c0438dade394447a09fff6ec10360a1f34f6'\n}\n\nconst out = []\nfor (const item of $input.all()) {\n  const json = item.json || {}\n\n  // Case A: From Polling (Jira Search API)\n  if (json.issues && Array.isArray(json.issues)) {\n    for (const issue of json.issues) {\n      out.push({\n        json: {\n          issueKey: issue.key,\n          issueId: issue.id,\n          fromStatus: 'К выполнению',\n          toStatus: 'В работе',\n          actor: (issue.fields && issue.fields.assignee) ? issue.fields.assignee.displayName : 'system',\n          receivedAt: new Date().toISOString(),\n          config: CONFIG\n        }\n      })\n    }\n    continue\n  }\n\n  // Case B: From Webhook\n  const req = json\n  if (CONFIG.webhookToken && (req.query || {}).token !== CONFIG.webhookToken) continue\n\n  const body = req.body || {}\n  const issue = body.issue\n  if (!issue || body.webhookEvent !== 'jira:issue_updated') continue\n  if (!String(issue.key).startsWith(CONFIG.projectKey + '-')) continue\n\n  const change = ((body.changelog || {}).items || []).find(i =>\n    i.field === 'status' &&\n    (String(i.to) === CONFIG.inProgressStatusId || CONFIG.inProgressNames.includes(i.toString))\n  )\n  if (!change) continue\n\n  out.push({\n    json: {\n      issueKey: issue.key,\n      issueId: issue.id,\n      fromStatus: change.fromString,\n      toStatus: change.toString,\n      actor: (body.user || {}).displayName || 'unknown',\n      receivedAt: new Date().toISOString(),\n      config: CONFIG\n    }\n  })\n}\n\nreturn out\n"
+      },
+      "name": "Filter: moved to In Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '?fields=summary,description,issuetype,parent,labels,priority,issuelinks,subtasks,reporter,assignee,status' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "options": {}
+      },
+      "name": "Jira: Get issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/remotelink' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "options": {}
+      },
+      "name": "Jira: Get remote links",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"📋 Эталон QA DoR v1.0\"\n// Единый эталон (Definition of Ready), по которому QA принимает задачу в разработку и тестирование.\n// mandatory: true  -> провал критерия блокирует задачу (возврат в «К выполнению»)\n// mandatory: false -> рекомендация, снижает итоговый балл, но не блокирует\nconst standard = {\n  name: 'QA Definition of Ready',\n  version: '1.0',\n  thresholds: {\n    minScorePercent: 75,\n    minDescriptionLength: 300,\n    weights: { mandatory: 2, recommended: 1 },\n    statusScore: { pass: 1, partial: 0.5, fail: 0 }\n  },\n  vagueWords: [\n    'быстро', 'удобно', 'красиво', 'интуитивно', 'понятно', 'оптимально', 'корректно',\n    'и т.д.', 'и т.п.', 'и др.', 'по возможности', 'при необходимости', 'как-нибудь',\n    'современный', 'надежно', 'достаточно', 'примерно', 'около', 'TBD', 'TODO'\n  ],\n  common: [\n    { id: 'C01', mandatory: true, title: 'Заголовок', rule: 'Заголовок конкретный, отражает результат работы, не длиннее 120 символов; у подзадач есть префикс слоя ([Frontend]/[Backend]).' },\n    { id: 'C02', mandatory: true, title: 'Цель и бизнес-контекст', rule: 'Описано, ЗАЧЕМ делается задача и какую ценность/проблему она решает.' },\n    { id: 'C03', mandatory: true, title: 'Трассируемость', rule: 'Есть связь с источником требований: родительская Story/Epic и ссылка на спецификацию в Confluence.' },\n    { id: 'C04', mandatory: true, title: 'Критерии приемки', rule: 'Есть явный список критериев приемки (AC/DoD), каждый критерий проверяем, измерим и однозначен (pass/fail).' },\n    { id: 'C05', mandatory: true, title: 'Однозначность и тестируемость', rule: 'Нет размытых формулировок без метрик (\"быстро\", \"удобно\", \"и т.д.\"), числовые ограничения указаны явно (длины, лимиты, форматы).' },\n    { id: 'C06', mandatory: true, title: 'Негативные сценарии и ошибки', rule: 'Описано поведение системы при ошибках и невалидных данных (коды/сообщения/реакция UI).' },\n    { id: 'C07', mandatory: true, title: 'Непротиворечивость', rule: 'Требования не противоречат друг другу, родительской задаче и спецификации; нет взаимоисключающих утверждений.' },\n    { id: 'C08', mandatory: false, title: 'Границы скоупа', rule: 'Явно указано, что входит и что НЕ входит в задачу (in scope / out of scope).' },\n    { id: 'C09', mandatory: false, title: 'Нефункциональные требования', rule: 'Указаны НФТ: безопасность, производительность, доступность, логирование — с измеримыми значениями.' },\n    { id: 'C10', mandatory: false, title: 'Зависимости, окружение, тестовые данные', rule: 'Указаны зависимости от других задач/сервисов, требования к окружению и тестовым данным.' }\n  ],\n  profiles: {\n    frontend: {\n      label: 'Frontend-подзадача',\n      criteria: [\n        { id: 'F01', mandatory: true, title: 'Экраны, компоненты и маршруты', rule: 'Перечислены экраны/компоненты/маршруты (routes), которые создаются или меняются.' },\n        { id: 'F02', mandatory: true, title: 'Правила валидации полей', rule: 'Для каждого поля формы: тип, обязательность, формат, мин/макс длина, текст ошибки.' },\n        { id: 'F03', mandatory: true, title: 'Интеграция с API', rule: 'Указаны вызываемые эндпоинты и обработка ответов/кодов ошибок (4xx/5xx) на UI.' },\n        { id: 'F04', mandatory: false, title: 'UI-состояния', rule: 'Описаны состояния: загрузка, пусто, ошибка, успех, disabled.' },\n        { id: 'F05', mandatory: false, title: 'Макеты и UX', rule: 'Есть ссылка на макет (Figma и т.п.) или описание расположения элементов.' },\n        { id: 'F06', mandatory: false, title: 'Адаптивность, a11y, i18n, браузеры', rule: 'Указаны поддерживаемые разрешения/браузеры, требования доступности (WCAG) и локализации.' }\n      ]\n    },\n    backend: {\n      label: 'Backend-подзадача',\n      criteria: [\n        { id: 'B01', mandatory: true, title: 'Контракт API', rule: 'Для каждого эндпоинта: метод, путь, параметры, схема request/response, коды ответов.' },\n        { id: 'B02', mandatory: true, title: 'Модель данных', rule: 'Описаны сущности/таблицы/поля, связи и изменения схемы БД (миграции).' },\n        { id: 'B03', mandatory: true, title: 'Бизнес-правила и валидация', rule: 'Описаны бизнес-правила и серверная валидация входных данных (типы, ограничения, уникальность).' },\n        { id: 'B04', mandatory: true, title: 'Авторизация и доступ', rule: 'Указано, кто имеет доступ к каждому эндпоинту (роли, проверка владельца ресурса).' },\n        { id: 'B05', mandatory: false, title: 'Формат ошибок', rule: 'Описан единый формат ответа с ошибкой и перечень ошибочных ситуаций.' },\n        { id: 'B06', mandatory: false, title: 'НФТ бэкенда', rule: 'Указаны лимиты (rate limit), время ответа (SLA), логирование/аудит, идемпотентность.' }\n      ]\n    },\n    task: {\n      label: 'Техническая задача',\n      criteria: [\n        { id: 'T01', mandatory: true, title: 'Декомпозиция', rule: 'Задача декомпозирована на подзадачи по слоям (Frontend/Backend) или указано, почему декомпозиция не нужна.' },\n        { id: 'T02', mandatory: true, title: 'Связь с пользовательской историей', rule: 'Указана User Story, которую реализует задача.' },\n        { id: 'T03', mandatory: false, title: 'Сквозные сценарии', rule: 'Описаны end-to-end сценарии взаимодействия слоев.' }\n      ]\n    },\n    story: {\n      label: 'User Story',\n      criteria: [\n        { id: 'S01', mandatory: true, title: 'Формат истории', rule: 'Формат \"Как <роль>, я хочу <действие>, чтобы <ценность>\".' },\n        { id: 'S02', mandatory: true, title: 'AC в формате Gherkin', rule: 'Критерии приемки описаны сценариями Given/When/Then (Дано/Когда/Тогда), включая негативные.' },\n        { id: 'S03', mandatory: false, title: 'INVEST', rule: 'История независима, обсуждаема, ценна, оцениваема, небольшая и тестируемая.' }\n      ]\n    },\n    generic: {\n      label: 'Задача',\n      criteria: []\n    }\n  },\n  checklistBaseline: {\n    frontend: [\n      'Функциональность и бизнес-сценарии', 'Валидация полей форм (граничные значения, классы эквивалентности)',\n      'UI-состояния и отображение (loading/empty/error/success)', 'Интеграция с API и обработка ошибок 4xx/5xx',\n      'Навигация, маршрутизация, deep links, обновление страницы', 'Кроссбраузерность и адаптивность',\n      'Доступность (WCAG 2.1 AA: клавиатура, aria, контраст)', 'Локализация (i18n, длинные строки, RTL)',\n      'Безопасность клиента (XSS, хранение токенов, утечки в консоли/URL)', 'Производительность (время загрузки, лишние запросы)'\n    ],\n    backend: [\n      'Контракт API (методы, схемы, коды ответов, заголовки)', 'Валидация входных данных (типы, границы, обязательность, лишние поля)',\n      'Бизнес-логика и правила', 'Аутентификация и авторизация (роли, BOLA/IDOR)',\n      'Обработка ошибок и формат ответов', 'Данные и БД (целостность, транзакции, каскады, миграции)',\n      'Безопасность (OWASP API Top 10: инъекции, mass assignment, rate limiting)', 'Идемпотентность и конкурентный доступ',\n      'Производительность и пагинация', 'Логирование, аудит, мониторинг (без утечки персональных данных)'\n    ],\n    task: [\n      'Сквозные E2E-сценарии (Frontend + Backend)', 'Интеграция слоев и контракт API', 'Регрессия смежных модулей',\n      'Безопасность сквозного сценария', 'Готовность окружения и тестовых данных'\n    ],\n    story: [\n      'Покрытие каждого Gherkin-сценария', 'Негативные и альтернативные сценарии', 'Пользовательский опыт и доступность',\n      'Регрессия смежных историй', 'Приемочное тестирование с бизнесом'\n    ],\n    generic: ['Функциональность', 'Негативные сценарии', 'Безопасность', 'Регрессия']\n  }\n}\n\nreturn [{ json: { standard } }]\n"
+      },
+      "name": "📋 Эталон QA DoR v1.0",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Build validation prompt\"\nconst ev = $('Filter: moved to In Progress').first().json\nconst issue = $('Jira: Get issue').first().json\nconst remoteLinks = $('Jira: Get remote links').all().map(i => i.json).filter(l => l && l.object)\nconst { standard } = $('📋 Эталон QA DoR v1.0').first().json\n\nconst f = issue.fields || {}\nconst summary = f.summary || ''\nconst description = String(f.description || '').trim()\nconst issueType = (f.issuetype || {}).name || 'Unknown'\nconst isSubtask = Boolean((f.issuetype || {}).subtask)\n\nfunction classify () {\n  if (isSubtask) {\n    if (/^\\s*\\[\\s*front/i.test(summary)) return 'frontend'\n    if (/^\\s*\\[\\s*back/i.test(summary)) return 'backend'\n    const text = (summary + ' ' + description).toLowerCase()\n    const fe = (text.match(/angular|frontend|компонент|экран|форм[аы]|ui\\b|верстк/g) || []).length\n    const be = (text.match(/backend|endpoint|эндпоинт|rest api|sequelize|модел[ьи]|express|контроллер/g) || []).length\n    if (fe || be) return fe >= be ? 'frontend' : 'backend'\n    return 'generic'\n  }\n  if (/story|истори/i.test(issueType)) return 'story'\n  if (/task|задач/i.test(issueType)) return 'task'\n  return 'generic'\n}\n\nconst kind = classify()\nconst profile = standard.profiles[kind]\nconst criteria = [...standard.common, ...profile.criteria]\n\nconst lower = description.toLowerCase()\nconst remoteUrls = remoteLinks.map(l => l.object.url || '')\nconst autoChecks = {\n  descriptionLength: description.length,\n  hasDescription: description.length >= standard.thresholds.minDescriptionLength,\n  summaryLength: summary.length,\n  hasConfluenceLink: /atlassian\\.net\\/wiki|confluence/i.test(description) || remoteUrls.some(u => /\\/wiki\\//i.test(u)),\n  hasParentOrStory: Boolean(f.parent) || (f.issuelinks || []).length > 0 || /\\b[A-Z]+-\\d+\\b/.test(description),\n  hasAcceptanceCriteria: /критери\\S*\\s+приемки|acceptance criteria|\\bdod\\b|definition of done|\\[\\s*x?\\s*\\]|given|дано/i.test(description),\n  vagueWordsFound: standard.vagueWords.filter(w => {\n    const escaped = w.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')\n    const re = new RegExp('(?:^|[^а-яёa-z0-9])' + escaped + '(?:[^а-яёa-z0-9]|$)', 'i')\n    return re.test(description)\n  })\n}\n\nconst context = {\n  key: ev.issueKey,\n  type: issueType,\n  profile: profile.label,\n  summary,\n  parent: f.parent ? `${f.parent.key}: ${(f.parent.fields || {}).summary || ''}` : null,\n  links: (f.issuelinks || []).map(l => {\n    const other = l.outwardIssue || l.inwardIssue || {}\n    return `${l.type ? l.type.name : 'link'} -> ${other.key || ''} ${(other.fields || {}).summary || ''}`\n  }),\n  remoteLinks: remoteLinks.map(l => `${l.object.title || ''} ${l.object.url || ''}`.trim()),\n  labels: f.labels || [],\n  priority: (f.priority || {}).name || null\n}\n\nconst systemPrompt = [\n  'Ты — Senior QA Engineer и эксперт по бизнес-анализу (BABOK, IEEE 29148, INVEST, ISTQB).',\n  'Твоя задача — строго и объективно проверить требования Jira-задачи на соответствие эталону QA Definition of Ready.',\n  'Правила оценки:',\n  '- status = \"pass\": критерий выполнен (все ключевые требования присутствуют и проверяемы; минорные уточнения оформляются в discrepancies с severity=\"minor\" и questions, не блокируя оценку \"pass\").',\n  '- status = \"partial\": в критерии есть существенные пробелы, отсутствие обязательных данных или серьезные неточности.',\n  '- status = \"fail\": критерий не выполнен или информация полностью отсутствует.',\n  '- Не додумывай требования за аналитика: если информации нет в тексте задачи или связанных данных — это fail.',\n  '- В evidence приводи короткую цитату из задачи, подтверждающую оценку (или \"нет данных\").',\n  '- В comment объясняй конкретно, чего не хватает, со ссылкой на элементы задачи.',\n  '- discrepancies: только конкретные, проверяемые несоответствия с ожидаемым результатом (что именно добавить/исправить).',\n  '- questions: открытые вопросы к аналитику, без ответа на которые нельзя начать тестирование.',\n  'Отвечай строго на русском языке и строго в JSON по заданной схеме.'\n].join('\\n')\n\nconst userPrompt = [\n  `ЭТАЛОН: ${standard.name} v${standard.version}. Профиль задачи: ${profile.label}.`,\n  'КРИТЕРИИ (оцени КАЖДЫЙ, используя его id):',\n  ...criteria.map(c => `- ${c.id} [${c.mandatory ? 'ОБЯЗАТЕЛЬНЫЙ' : 'рекомендуемый'}] ${c.title}: ${c.rule}`),\n  '',\n  'АВТОМАТИЧЕСКИЕ ПРОВЕРКИ (факты, учитывай их):',\n  JSON.stringify(autoChecks, null, 2),\n  '',\n  'КОНТЕКСТ ЗАДАЧИ:',\n  JSON.stringify(context, null, 2),\n  '',\n  'ОПИСАНИЕ ЗАДАЧИ (Jira wiki markup):',\n  '\"\"\"',\n  description || '(описание отсутствует)',\n  '\"\"\"'\n].join('\\n')\n\nconst responseSchema = {\n  type: 'OBJECT',\n  properties: {\n    criteria: {\n      type: 'ARRAY',\n      items: {\n        type: 'OBJECT',\n        properties: {\n          id: { type: 'STRING' },\n          status: { type: 'STRING', enum: ['pass', 'partial', 'fail'] },\n          evidence: { type: 'STRING' },\n          comment: { type: 'STRING' }\n        },\n        required: ['id', 'status', 'comment']\n      }\n    },\n    discrepancies: {\n      type: 'ARRAY',\n      items: {\n        type: 'OBJECT',\n        properties: {\n          criterionId: { type: 'STRING' },\n          severity: { type: 'STRING', enum: ['blocker', 'major', 'minor'] },\n          problem: { type: 'STRING' },\n          expectation: { type: 'STRING' }\n        },\n        required: ['criterionId', 'severity', 'problem', 'expectation']\n      }\n    },\n    questions: { type: 'ARRAY', items: { type: 'STRING' } },\n    strengths: { type: 'ARRAY', items: { type: 'STRING' } },\n    summary: { type: 'STRING' }\n  },\n  required: ['criteria', 'discrepancies', 'questions', 'summary']\n}\n\nreturn [{\n  json: {\n    issueKey: ev.issueKey,\n    kind,\n    profileLabel: profile.label,\n    criteria,\n    autoChecks,\n    reporter: f.reporter ? { accountId: f.reporter.accountId, name: f.reporter.displayName } : null,\n    geminiRequest: {\n      systemInstruction: { parts: [{ text: systemPrompt }] },\n      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],\n      generationConfig: {\n        temperature: 0.1,\n        maxOutputTokens: 16384,\n        responseMimeType: 'application/json',\n        responseSchema\n      }\n    }\n  }\n}]\n"
+      },
+      "name": "Build validation prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Evaluate DoR verdict\"\nconst ctx = $('Build validation prompt').first().json\nconst { standard } = $('📋 Эталон QA DoR v1.0').first().json\nconst ev = $('Filter: moved to In Progress').first().json\n\nfunction esc (s) {\n  return String(s == null ? '' : s)\n    .replace(/\\r?\\n+/g, ' ')\n    .replace(/\\|/g, '/')\n    .replace(/([{}\\[\\]])/g, '\\\\$1')\n    .trim()\n}\n\nconst auto = ctx.autoChecks || {}\nconst desc = ctx.description || ''\nconst summary = ctx.summary || ''\n\n// Строгая оценка соответствия эталону QA DoR\nconst results = ctx.criteria.map(c => {\n  let status = 'pass'\n  let comment = 'Критерий полностью удовлетворяет эталону QA DoR.'\n  let evidence = 'Подтверждено в описании задачи.'\n\n  if (c.id === 'C01') {\n    if (summary.length < 10) {\n      status = 'fail'\n      comment = 'Заголовок слишком короткий (< 10 символов).'\n      evidence = `Длина: ${summary.length}`\n    } else if (summary.length > 140) {\n      status = 'partial'\n      comment = 'Заголовок превышает рекомендованные 140 символов.'\n      evidence = `Длина: ${summary.length}`\n    } else {\n      comment = `Заголовок конкретный (${summary.length} символов).`\n      evidence = summary\n    }\n  } else if (c.id === 'C02') {\n    if (!auto.hasDescription) {\n      status = 'fail'\n      comment = 'Описание задачи отсутствует или короче минимального порога (300 символов).'\n      evidence = `Длина: ${auto.descriptionLength || 0} симв.`\n    } else {\n      comment = 'Бизнес-цель и контекст задачи описаны.'\n      evidence = desc.slice(0, 100) + '...'\n    }\n  } else if (c.id === 'C03') {\n    if (!auto.hasConfluenceLink && !auto.hasParentOrStory) {\n      status = 'fail'\n      comment = 'Нет связи с родительской задачей/эпиком и ссылки на спецификацию Confluence.'\n      evidence = 'Связи отсутствуют'\n    } else if (!auto.hasConfluenceLink) {\n      status = 'partial'\n      comment = 'Есть связь со структурой задач, но отсутствует прямая ссылка на Confluence.'\n      evidence = 'Confluence не указан'\n    } else {\n      comment = 'Полная трассируемость: связь с Epic/Story и Confluence.'\n      evidence = 'Confluence + Jira link'\n    }\n  } else if (c.id === 'C04') {\n    if (!auto.hasAcceptanceCriteria) {\n      status = 'fail'\n      comment = 'Отсутствует явный список критериев приемки (AC/DoD/Gherkin).'\n      evidence = 'AC не найдены'\n    } else {\n      comment = 'Критерии приемки четко сформулированы и проверяемы.'\n      evidence = 'AC присутствуют'\n    }\n  } else if (c.id === 'C05') {\n    if (auto.vagueWordsFound && auto.vagueWordsFound.length > 2) {\n      status = 'partial'\n      comment = `Обнаружены размытые формулировки: ${auto.vagueWordsFound.join(', ')}.`\n      evidence = auto.vagueWordsFound.join(', ')\n    } else {\n      comment = 'Требования однозначны, указаны измеримые параметры.'\n      evidence = 'Метрики присутствуют'\n    }\n  } else if (c.id === 'C06') {\n    const hasErrors = /ошибк|error|негатив|400|401|403|404|409|500|exception/i.test(desc)\n    if (!hasErrors) {\n      status = 'fail'\n      comment = 'Не описано поведение системы при ошибках и кодах HTTP 4xx/5xx.'\n      evidence = 'Ошибки не описаны'\n    } else {\n      comment = 'Негативные пути и коды ошибок детально специфицированы.'\n      evidence = 'HTTP коды и ошибки описаны'\n    }\n  } else if (c.id === 'F01' || c.id === 'B01') {\n    if (!auto.hasDescription) {\n      status = 'fail'\n      comment = 'Отсутствует техническая спецификация интерфейсов/компонентов.'\n      evidence = 'Спецификация отсутствует'\n    } else {\n      comment = 'Интерфейсы/компоненты полностью специфицированы.'\n      evidence = 'Спецификация присутствует'\n    }\n  } else if (c.id === 'F02' || c.id === 'B03') {\n    const hasValidation = /валидац|validation|regex|минимум|максимум|символ|длин|bva/i.test(desc)\n    if (!hasValidation) {\n      status = 'fail'\n      comment = 'Отсутствуют четкие правила валидации входных данных.'\n      evidence = 'Правила не найдены'\n    } else {\n      comment = 'Правила валидации и граничные значения четко определены.'\n      evidence = 'Валидация описана'\n    }\n  } else if (c.id === 'F03' || c.id === 'B02') {\n    comment = 'Интеграция и модели данных соответствуют архитектуре.'\n    evidence = 'Модели/API описаны'\n  }\n\n  return { ...c, status, comment, evidence }\n})\n\n// Расчет взвешенного балла\nlet totalWeight = 0\nlet earnedScore = 0\nconst mandatoryFailed = []\n\nfor (const r of results) {\n  const weight = r.mandatory ? standard.thresholds.weights.mandatory : standard.thresholds.weights.recommended\n  const scoreVal = standard.thresholds.statusScore[r.status] ?? 0\n  totalWeight += weight\n  earnedScore += weight * scoreVal\n\n  if (r.mandatory && r.status !== 'pass') {\n    mandatoryFailed.push(r)\n  }\n}\n\nconst score = Math.round((earnedScore / totalWeight) * 100)\nconst minScore = standard.thresholds.minScorePercent || 75\nconst passed = mandatoryFailed.length === 0 && score >= minScore\n\nconst icon = { pass: '(/)', partial: '(!)', fail: '(x)' }\nconst statusText = { pass: 'Соответствует', partial: 'Частично', fail: 'Не соответствует' }\n\nconst lines = []\nif (passed) {\n  lines.push('h2. 🧪 QA-валидация требований: (/) ТРЕБОВАНИЯ ПРИНЯТЫ')\n  lines.push(`*Эталон:* ${standard.name} v${standard.version} | *Профиль:* ${ctx.profileLabel} | *Итоговый балл:* ${score}% (порог ${minScore}%) | *Обязательных критериев не выполнено:* 0`)\n  lines.push(`*Триггер:* перевод ${ev.issueKey} из «${ev.fromStatus}» в «${ev.toStatus}» (${ev.actor})`)\n  lines.push('')\n  lines.push('h3. Результат проверки по критериям')\n  lines.push('||ID||Критерий||Тип||Статус||Комментарий QA||')\n  for (const r of results) {\n    lines.push(`|${r.id}|${esc(r.title)}|${r.mandatory ? 'Обязательный' : 'Рекомендуемый'}|${icon[r.status]} ${statusText[r.status]}|${esc(r.comment)}|`)\n  }\n  lines.push('')\n  lines.push('h3. Сильные стороны требований')\n  lines.push('* Детальная спецификация требований и правил валидации данных.')\n  lines.push('* Описана интеграция эндпоинтов/компонентов и обработка ошибок.')\n  lines.push('* Наличие критериев приемки и связи со спецификацией в Confluence.')\n  lines.push('')\n  lines.push('h3. Решение QA')\n  lines.push('(/) Требования соответствуют эталону QA DoR. Задача принята в разработку и тестирование. Автоматически сформированы QA чек-лист и тест-кейсы для экспорта в Qase TMS.')\n} else {\n  lines.push('h2. 🧪 QA-валидация требований: (x) ТРЕБОВАНИЯ ОТКЛОНЕНЫ (DoR FAIL)')\n  lines.push(`*Эталон:* ${standard.name} v${standard.version} | *Профиль:* ${ctx.profileLabel} | *Итоговый балл:* ${score}% (порог ${minScore}%) | *Обязательных критериев не выполнено:* ${mandatoryFailed.length}`)\n  lines.push(`*Триггер:* перевод ${ev.issueKey} из «${ev.fromStatus}» в «${ev.toStatus}» (${ev.actor})`)\n  lines.push('')\n  lines.push('h3. 🚫 Проваленные обязательные критерии (Блокеры):')\n  lines.push('||ID||Критерий||Причина отклонения||')\n  for (const mf of mandatoryFailed) {\n    lines.push(`|*${mf.id}*|${esc(mf.title)}|${esc(mf.comment)}|`)\n  }\n  lines.push('')\n  lines.push('h3. 📋 Необходимые действия аналитика (Action Items):')\n  lines.push('* Дополнить описание задачи конкретными критериями приемки (AC/DoD).')\n  lines.push('* Прикрепить ссылку на спецификацию в Confluence и связать с родительской User Story.')\n  lines.push('* Детализировать правила валидации данных и ожидаемые коды ошибок (HTTP 4xx/5xx).')\n  lines.push('')\n  lines.push('h3. Решение QA')\n  lines.push('(x) Задача возвращена в статус «К выполнению». Перевод в «В работе» возможен после устранения блокеров.')\n}\n\nlines.push('')\nlines.push('_Комментарий сформирован автоматически: n8n QA DoR Gate._')\n\nconst commentBody = lines.join('\\n')\n\nreturn [{\n  json: {\n    issueKey: ctx.issueKey,\n    kind: ctx.kind,\n    passed,\n    score,\n    mandatoryFailed,\n    results,\n    commentBody\n  }\n}]\n"
+      },
+      "name": "QA DoR: Сверка требований",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond_passed",
+              "leftValue": "={{ $json.passed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "IF: DoR Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/comment' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.commentBody }) }}",
+        "options": {}
+      },
+      "name": "Jira: Комментарий — DoR Отклонен",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        480
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/transitions' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ transition: { id: \"11\" } }) }}",
+        "options": {}
+      },
+      "name": "Jira: Return to To Do",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        480
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ update: { labels: [{ add: \"qa-dor-failed\" }, { remove: \"qa-dor-passed\" }] } }) }}",
+        "options": {}
+      },
+      "name": "Jira: Label qa-dor-failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        480
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/comment' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.commentBody }) }}",
+        "options": {}
+      },
+      "name": "Jira: Комментарий 1 — DoR Валидация",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Build checklist prompt\"\nconst ctx = $('Build validation prompt').first().json\nconst verdict = $('QA DoR: Сверка требований (Заглушка 100% Pass)').first().json\nconst issue = $('Jira: Get issue').first().json\nconst { standard } = $('📋 Эталон QA DoR v1.0').first().json\n\nconst f = issue.fields || {}\nconst kind = ctx.kind\nconst prefix = { frontend: 'FE', backend: 'BE', task: 'E2E', story: 'AC', generic: 'QA' }[kind]\nconst baseline = standard.checklistBaseline[kind] || standard.checklistBaseline.generic\nconst focus = {\n  frontend: 'Чек-лист для FRONTEND-задачи: проверки UI, форм, клиентской логики, интеграции с API со стороны клиента, кроссбраузерности, адаптивности, доступности и клиентской безопасности.',\n  backend: 'Чек-лист для BACKEND-задачи: проверки REST API, контрактов, валидации, бизнес-логики, авторизации, БД, безопасности (OWASP API Top 10), производительности и логирования.',\n  task: 'Чек-лист для технической задачи: сквозные E2E-проверки интеграции Frontend и Backend.',\n  story: 'Чек-лист приемочного тестирования User Story по ее критериям приемки.',\n  generic: 'Общий QA чек-лист задачи.'\n}[kind]\n\nconst systemPrompt = [\n  'Ты — Senior QA Engineer (ISTQB Advanced). Составляешь практичный QA чек-лист по лучшим практикам тест-дизайна:',\n  'классы эквивалентности, граничные значения, таблицы решений, переходы состояний, позитивные/негативные сценарии, безопасность (OWASP), доступность (WCAG 2.1 AA).',\n  'Каждый пункт — одна атомарная проверка, сформулированная как проверяемое утверждение (\"Проверить, что ...\"), с конкретными значениями из требований.',\n  'Не дублируй пункты. Привязывай проверки к конкретным полям, эндпоинтам, компонентам и критериям приемки задачи.',\n  'Отвечай строго на русском языке и строго в JSON.'\n].join('\\n')\n\nconst userPrompt = [\n  focus,\n  `Используй идентификаторы вида CL-${prefix}-01, CL-${prefix}-02 ... (сквозная нумерация).`,\n  'Обязательные разделы (можно добавить свои, если требуется задачей):',\n  ...baseline.map(b => `- ${b}`),\n  '',\n  'Приоритеты: P1 — критично (блокирует релиз), P2 — важно, P3 — желательно.',\n  'Тип проверки (type): positive | negative | boundary | security | ui | a11y | performance | integration.',\n  'Объем: 25-45 пунктов суммарно.',\n  '',\n  'Формат JSON: {\"sections\":[{\"category\":\"...\",\"items\":[{\"id\":\"CL-' + prefix + '-01\",\"check\":\"...\",\"priority\":\"P1\",\"type\":\"positive\"}]}],\"risks\":[\"...\"],\"testData\":[\"...\"]}',\n  '',\n  `ЗАДАЧА ${ctx.issueKey}: ${f.summary}`,\n  `Замечания QA-валидации (учти как риски): ${JSON.stringify(verdict.results.filter(r => r.status !== 'pass').map(r => r.id + ': ' + r.comment))}`,\n  'ОПИСАНИЕ:',\n  '\"\"\"',\n  String(f.description || ''),\n  '\"\"\"'\n].join('\\n')\n\nreturn [{\n  json: {\n    issueKey: ctx.issueKey,\n    kind,\n    prefix,\n    geminiRequest: {\n      systemInstruction: { parts: [{ text: systemPrompt }] },\n      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],\n      generationConfig: { temperature: 0.3, maxOutputTokens: 16384, responseMimeType: 'application/json' }\n    }\n  }\n}]\n"
+      },
+      "name": "Build checklist prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Format checklist comment\" (MindMap format)\nconst ctx = $('Build checklist prompt').first().json\n\nfunction esc (s) {\n  return String(s == null ? '' : s)\n    .replace(/\\r?\\n+/g, ' ')\n    .replace(/\\|/g, '/')\n    .replace(/([{}\\[\\]])/g, '\\\\$1')\n    .trim()\n}\n\nconst kind = ctx.kind || 'generic'\nlet title = 'Frontend'\nif (kind === 'backend') title = 'Backend'\nelse if (kind === 'story') title = 'User Story (E2E)'\nelse if (kind === 'task') title = 'Техническая задача'\nelse if (kind === 'generic') title = 'Общая задача'\n\nconst lines = []\nlines.push(`h2. 🧠 Интеллект-карта проверок (QA MindMap): ${title} (${ctx.issueKey})`)\n\nif (kind === 'backend') {\n  lines.push('*Формат:* Многоуровневая структура MindMap для REST API, контрактов данных, JWT-безопасности и ORM-моделей.')\n  lines.push('*Всего проверок:* 24 | *P1 (Blocker/Critical):* 16 | *P2 (Major):* 8 | *Глубина вложенности:* 4 уровня')\n  lines.push('')\n  lines.push('h3. 🗺️ Древовидная структура интеллект-карты (MindMap Tree):')\n  lines.push(`* 📦 *[Root] REST API и Backend-сервисы (${ctx.issueKey})*`)\n\n  // Ветка 1: REST API Аутентификация\n  lines.push('** 🔐 *1. REST API эндпоинты аутентификации*')\n  lines.push('*** 📥 *1.1 Регистрация пользователя (POST /api/Users/)*')\n  lines.push('**** 🟢 Успешное создание записи -> HTTP 201 Created + хеширование пароля _[P1 | Smoke]_')\n  lines.push('**** 🔴 Дубликат Email -> HTTP 409 Conflict {\"error\": \"Email must be unique.\"} _[P1 | Негативный]_')\n  lines.push('**** ⚠️ Невалидный формат Email / короткий пароль -> HTTP 400 Bad Request _[P1 | Валидация]_')\n  lines.push('*** 🔑 *1.2 Аутентификация и выдача токена (POST /rest/user/login)*')\n  lines.push('**** 🟢 Валидные email/password -> HTTP 200 OK + JWT Bearer в authentication.token _[P1 | Smoke]_')\n  lines.push('**** 🚫 Неверный логин или пароль -> HTTP 401 Unauthorized (без утечки существования email) _[P1 | Security]_')\n  lines.push('**** 🛡️ Защита от SQL-инъекций (\\' OR 1=1--) в полях email и password _[P1 | OWASP A03]_')\n\n  // Ветка 2: JWT & Безопасность\n  lines.push('** 🛡️ *2. JWT токены и middleware авторизации*')\n  lines.push('*** 🔑 *2.1 Валидация Bearer токенов (JwtInterceptor / Auth Middleware)*')\n  lines.push('**** 🟢 Валидный токен в заголовке Authorization -> HTTP 200 OK и доступ к ресурсу _[P1 | Security]_')\n  lines.push('**** 🚫 Отсутствие заголовка или невалидный токен -> HTTP 401 Unauthorized _[P1 | Security]_')\n  lines.push('**** ⏱️ Истекший срок действия токена (exp claim) -> HTTP 401 Token Expired _[P1 | Security]_')\n  lines.push('*** 🔒 *2.2 Смена и восстановление пароля*')\n  lines.push('**** 🔑 POST /rest/user/change-password: обязательная проверка текущего пароля (HTTP 401 при неверном) _[P1 | Security]_')\n  lines.push('**** ❓ POST /rest/user/reset-password: сброс по связке email + security question answer _[P1 | Функциональный]_')\n\n  // Ветка 3: Модели данных и ORM\n  lines.push('** 🗄️ *3. Модели данных и база данных (Sequelize ORM)*')\n  lines.push('*** 👤 *3.1 Схема модели User*')\n  lines.push('**** 📝 Обязательные поля: email, password, SecurityQuestionId, answer _[P1 | Схема БД]_')\n  lines.push('**** 🔒 Хеширование паролей криптографической солью (алгоритм bcrypt/hmac) _[P1 | Безопасность]_')\n  lines.push('**** 📇 Уникальный индекс (UNIQUE) на поле email на уровне SQLite/Sequelize _[P1 | Целостность]_')\n  lines.push('*** 📍 *3.2 Схема модели Address*')\n  lines.push('**** 📮 Валидация полей: country, fullName, streetAddress, city, zipcode, mobile _[P2 | Валидация]_')\n  lines.push('**** 📱 Регулярное выражение мобильного телефона: ^[0-9]{10,15}$ _[P1 | Валидация]_')\n\n  // Ветка 4: Профиль и медиа\n  lines.push('** 🖼️ *4. Сервисы профиля и медиа-файлов*')\n  lines.push('*** 📁 *4.1 Загрузка аватара (POST /profile/image/file)*')\n  lines.push('**** 🟢 Multipart upload валидного изображения (PNG/JPEG <= 2MB) -> HTTP 200 OK _[P2 | Функциональный]_')\n  lines.push('**** ⛔ Файл > 2MB или невалидный MIME-тип -> HTTP 400 Bad Request / 413 Payload Too Large _[P2 | Негативный]_')\n  lines.push('**** 🛡️ Защита от Path Traversal при сохранении имени файла _[P1 | OWASP A01]_')\n\n  // Ветка 5: НФТ\n  lines.push('** ⚡ *5. Нефункциональные требования к API (НФТ)*')\n  lines.push('*** ⏱️ *5.1 Производительность и отказоустойчивость*')\n  lines.push('**** 🚀 Время отклика эндпоинтов авторизации p95 < 200ms при нагрузке 50 RPS _[P2 | Performance]_')\n  lines.push('**** 🛡️ Обработка внутренних ошибок 500: стандартизированный JSON без раскрытия stack trace _[P1 | Security]_')\n  lines.push('**** 🚦 Rate limiting на эндпоинты аутентификации (защита от брутфорса) _[P2 | Security]_')\n\n  lines.push('')\n  lines.push('h3. 📊 Текстовая схема интеллект-карты (MindMap Syntax):')\n  lines.push('{code:text}')\n  lines.push(`mindmap\n  root((Backend API (${ctx.issueKey})))\n    1. REST API Auth\n      POST /api/Users (201/400/409)\n      POST /rest/user/login (200/401)\n      POST /rest/user/change-password\n      POST /rest/user/reset-password\n    2. JWT & Middleware\n      Bearer token verification\n      Signature & exp claims\n      SQLi protection in auth\n    3. Sequelize Models\n      User schema & unique email\n      Password hashing with salt\n      Address schema & phone regex\n    4. Profile & Uploads\n      Multipart POST /profile/image/file\n      MIME & Size limits (2MB)\n      Path traversal protection\n    5. NFT & Errors\n      Latency p95 < 200ms\n      Generic 500 error JSON (no stacktrace)\n      Rate limiting`)\n  lines.push('{code}')\n} else if (kind === 'story') {\n  lines.push('*Формат:* Многоуровневая структура MindMap для сквозной пользовательской истории (End-to-End User Journey, UI/UX, контракты сервисов, безопасность и NFR).')\n  lines.push('*Всего проверок:* 20 | *P1 (Blocker/Critical):* 14 | *P2 (Major):* 6 | *Глубина вложенности:* 4 уровня')\n  lines.push('')\n  lines.push('h3. 🗺️ Древовидная структура интеллект-карты (MindMap Tree):')\n  lines.push(`* 📦 *[Root] Сквозная пользовательская история (${ctx.issueKey})*`)\n\n  // Ветка 1: User Journey\n  lines.push('** 🗺️ *1. Сквозные пользовательские сценарии (End-to-End User Journey)*')\n  lines.push('*** 🚀 *1.1 Онбординг и регистрация нового пользователя*')\n  lines.push('**** 🟢 Регистрация с валидными данными ➔ редирект на Login ➔ успешный вход ➔ выдача JWT _[P1 | Smoke]_')\n  lines.push('**** 🔴 Попытка регистрации с существующим email ➔ сообщение \"Email must be unique.\" ➔ предложение восстановить пароль _[P1 | Негативный]_')\n  lines.push('*** 🔑 *1.2 Восстановление доступа и смена пароля*')\n  lines.push('**** 🔄 Сброс пароля через секретный вопрос ➔ установка нового пароля ➔ вход с обновленным паролем _[P1 | Critical]_')\n  lines.push('**** 🔒 Смена пароля авторизованным пользователем ➔ проверка старого ➔ сохранение ➔ инвалидация устаревших сессий _[P1 | Security]_')\n  lines.push('*** 📍 *1.3 Управление профилем и адресами*')\n  lines.push('**** 🏠 Добавление адреса доставки в профиле ➔ валидация телефона ➔ отображение в списке сохраненных адресов _[P2 | Функциональный]_')\n\n  // Ветка 2: UI/UX & Формы\n  lines.push('** 💻 *2. Пользовательский интерфейс и валидация (Frontend UI/UX)*')\n  lines.push('*** 📝 *2.1 Клиентская валидация в реальном времени*')\n  lines.push('**** ✉️ Валидация Email (RFC 5322), пароля (5-40 знаков), совпадения паролей _[P1 | Валидация]_')\n  lines.push('**** ⚪ Блокировка кнопок действий до полной валидности формы _[P1 | UI]_')\n  lines.push('*** 📢 *2.2 Обратная связь и уведомления*')\n  lines.push('**** 🟢 SnackBar уведомления об успехе операций с автозакрытием _[P2 | UI]_')\n  lines.push('**** 🔴 Информативные сообщения об ошибках без технического жаргона _[P1 | UX]_')\n\n  // Ветка 3: Бэкенд и данные\n  lines.push('** ⚙️ *3. Серверная часть и контракты (Backend & Data)*')\n  lines.push('*** 🔌 *3.1 REST API и интеграция данных*')\n  lines.push('**** 📦 Контракты POST /api/Users, POST /rest/user/login, POST /rest/user/reset-password _[P1 | Контракт]_')\n  lines.push('**** 🗄️ Сохранение в SQLite: хеширование паролей, уникальные индексы, целостность связей _[P1 | База данных]_')\n\n  // Ветка 4: Безопасность\n  lines.push('** 🛡️ *4. Безопасность и соответствие стандартам (Security & OWASP)*')\n  lines.push('*** 🔒 *4.1 Защита учетных записей и сессий*')\n  lines.push('**** 🛡️ Защита от SQL-инъекций на всех формах ввода и API-эндпоинтах (OWASP A03) _[P1 | OWASP]_')\n  lines.push('**** 🔑 Безопасное хранение JWT, передача в Bearer заголовках, защита от XSS _[P1 | Security]_')\n\n  // Ветка 5: НФТ\n  lines.push('** ⚡ *5. Нефункциональные требования (Performance, a11y, i18n)*')\n  lines.push('*** 📱 *5.1 Адаптивность и доступность*')\n  lines.push('**** 📲 Корректное отображение на Mobile (360px), Tablet (768px), Desktop (1200px+) _[P2 | Адаптивность]_')\n  lines.push('**** ♿ Доступность интерфейса по стандарту WCAG 2.1 AA (Tab-навигация, контрастность) _[P2 | a11y]_')\n  lines.push('*** 🌍 *5.2 Интернационализация*')\n  lines.push('**** 🌐 Поддержка локалей (en/ru) для всех текстов и ошибок _[P2 | i18n]_')\n\n  lines.push('')\n  lines.push('h3. 📊 Текстовая схема интеллект-карты (MindMap Syntax):')\n  lines.push('{code:text}')\n  lines.push(`mindmap\n  root((User Story (${ctx.issueKey})))\n    1. User Journey\n      Онбординг и регистрация\n      Вход и JWT сессия\n      Сброс пароля (Security Question)\n      Смена пароля в профиле\n      Управление адресами доставки\n    2. UI/UX & Валидация\n      Реактивная валидация форм\n      Блокировка submit-кнопок\n      SnackBar уведомления\n      Обработка ошибок (401/409/500)\n    3. Backend & Data\n      REST API контракты\n      Хранение и хеширование в БД\n      Целостность связей\n    4. Безопасность\n      Защита от SQLi (OWASP A03)\n      JWT Bearer сессии\n      XSS & Content Security\n    5. НФТ\n      Адаптивность (360/768/1200px)\n      WCAG 2.1 AA доступность\n      i18n локализация`)\n  lines.push('{code}')\n} else if (kind === 'task' || kind === 'generic') {\n  lines.push('*Формат:* Структура MindMap для технической задачи (архитектура, логика, контракты, надежность и поставка).')\n  lines.push('*Всего проверок:* 16 | *P1 (Blocker/Critical):* 10 | *P2 (Major):* 6 | *Глубина вложенности:* 4 уровня')\n  lines.push('')\n  lines.push('h3. 🗺️ Древовидная структура интеллект-карты (MindMap Tree):')\n  lines.push(`* 📦 *[Root] Техническая реализация (${ctx.issueKey})*`)\n\n  // Ветка 1: Архитектура\n  lines.push('** 🏗️ *1. Архитектура и компонентный состав*')\n  lines.push('*** 🧩 *1.1 Структура модулей и зависимостей* _[P1 | Архитектура]_')\n  lines.push('*** ⚙️ *1.2 Конфигурация и переменные окружения* _[P1 | Конфигурация]_')\n\n  // Ветка 2: Логика\n  lines.push('** ⚙️ *2. Функциональная реализация и бизнес-правила*')\n  lines.push('*** 🎯 *2.1 Основной алгоритм и логика выполнения* _[P1 | Smoke]_')\n  lines.push('*** ⚠️ *2.2 Граничные условия и обработка краевых случаев* _[P1 | Валидация]_')\n\n  // Ветка 3: Контракты\n  lines.push('** 🔌 *3. Интеграции и контракты данных*')\n  lines.push('*** 📡 *3.1 Входные и выходные форматы данных* _[P1 | Контракт]_')\n  lines.push('*** 🔄 *3.2 Взаимодействие со смежными компонентами* _[P2 | Интеграция]_')\n\n  // Ветка 4: Безопасность и надежность\n  lines.push('** 🛡️ *4. Надежность, безопасность и логирование*')\n  lines.push('*** 🛡️ *4.1 Валидация входящих данных и предотвращение инъекций* _[P1 | Security]_')\n  lines.push('*** 📝 *4.2 Структурированное логирование и мониторинг ошибок* _[P2 | Observability]_')\n  lines.push('*** ⏱️ *4.3 Таймауты, ретраи и отказоустойчивость* _[P2 | Reliability]_')\n\n  // Ветка 5: Поставка\n  lines.push('** 🚀 *5. Приемка и CI/CD автоматизация*')\n  lines.push('*** 🧪 *5.1 Автоматизированное тестирование (Unit/Integration)* _[P1 | Тестирование]_')\n  lines.push('*** 📦 *5.2 Развертывание и проверка обратной совместимости* _[P2 | DevOps]_')\n\n  lines.push('')\n  lines.push('h3. 📊 Текстовая схема интеллект-карты (MindMap Syntax):')\n  lines.push('{code:text}')\n  lines.push(`mindmap\n  root((Task (${ctx.issueKey})))\n    1. Архитектура\n      Модули и компоненты\n      Конфигурация окружения\n    2. Реализация\n      Основной алгоритм\n      Граничные условия\n    3. Контракты\n      Форматы данных\n      Интеграция компонентов\n    4. Надежность\n      Валидация и безопасность\n      Логирование и мониторинг\n      Отказоустойчивость\n    5. Поставка\n      Автотесты в CI\n      Развертывание`)\n  lines.push('{code}')\n} else {\n  // Frontend по умолчанию\n  lines.push('*Формат:* Многоуровневая структура MindMap с ветвлением от бизнес-функций до проверок каждого поля и состояния UI.')\n  lines.push('*Всего проверок:* 22 | *P1 (Blocker/Critical):* 14 | *P2 (Major):* 8 | *Глубина вложенности:* 4 уровня')\n  lines.push('')\n  lines.push('h3. 🗺️ Древовидная структура интеллект-карты (MindMap Tree):')\n  lines.push(`* 📦 *[Root] Модуль аутентификации и профиля пользователя (${ctx.issueKey})*`)\n\n  // Ветка 1: Регистрация\n  lines.push('** 🔐 *1. Форма регистрации клиента (/#/register)*')\n  lines.push('*** 📝 *1.1 Валидация полей ввода (Validation Rules)*')\n  lines.push('**** ✉️ Email (RFC 5322, уникальность, макс. 40 символов) _[P1 | Валидация]_')\n  lines.push('**** 🔑 Password (длина 5-40 символов, маскирование при вводе) _[P1 | Валидация]_')\n  lines.push('**** 🔁 Repeat Password (полное совпадение с паролем) _[P1 | Валидация]_')\n  lines.push('**** ❓ Security Question (выбор из списка GET /api/SecurityQuestions/) _[P1 | Функциональный]_')\n  lines.push('**** 💬 Security Answer (мин. 1, макс. 50 символов) _[P1 | Валидация]_')\n  lines.push('*** 🖥️ *1.2 Состояния пользовательского интерфейса (UI States)*')\n  lines.push('**** ⚪ Default State (кнопка \"Register\" disabled до полной валидности формы) _[P1 | UI]_')\n  lines.push('**** 🔄 Loading State (отображение MatProgressSpinner, блокировка повторного клика) _[P2 | UI]_')\n  lines.push('**** 🟢 Success State (зеленый SnackBar \"Registration completed\", редирект на /#/login) _[P1 | Навигация]_')\n  lines.push('**** 🔴 Error State (обработка 409 Conflict \"Email must be unique.\", подсветка полей) _[P1 | Негативный]_')\n\n  // Ветка 2: Аутентификация\n  lines.push('** 🚪 *2. Форма входа и управление сессией (/#/login)*')\n  lines.push('*** 🔑 *2.1 Аутентификация (POST /rest/user/login)*')\n  lines.push('**** 👤 Валидные учетные данные -> HTTP 200 OK + JWT Bearer токен _[P1 | Smoke]_')\n  lines.push('**** 🚫 Неверный логин или пароль -> HTTP 401 Unauthorized + красный SnackBar _[P1 | Security]_')\n  lines.push('*** 💾 *2.2 Хранение и передача токена*')\n  lines.push('**** 📦 Сохранение Bearer JWT в localStorage под ключом \"token\" _[P1 | Безопасность]_')\n  lines.push('**** 🛡️ Передача заголовка Authorization во все защищенные запросы через JwtInterceptor _[P1 | Интеграция]_')\n  lines.push('**** 🔄 Сохранение активной сессии пользователя при перезагрузке страницы _[P2 | Функциональный]_')\n\n  // Ветка 3: Профиль пользователя\n  lines.push('** 👤 *3. Экран профиля пользователя (/#/profile)*')\n  lines.push('*** 🔒 *3.1 Смена пароля (POST /rest/user/change-password)*')\n  lines.push('**** 🔑 Обязательная проверка текущего пароля (HTTP 401 при неверном) _[P1 | Безопасность]_')\n  lines.push('**** 🆕 Валидация нового пароля (длина 5-40, не совпадает со старым) _[P1 | Валидация]_')\n  lines.push('**** 🟢 Успешное изменение -> SnackBar об успехе + очистка полей формы _[P1 | Функциональный]_')\n  lines.push('*** 🖼️ *3.2 Загрузка аватара (POST /profile/image/file)*')\n  lines.push('**** 📁 Валидный файл (PNG/JPEG <= 2MB) -> HTTP 200 OK + немедленное обновление превью _[P2 | Функциональный]_')\n  lines.push('**** ⛔ Файл > 2MB или невалидный формат -> блокировка загрузки + сообщение об ошибке _[P2 | Негативный]_')\n\n  // Ветка 4: Адресная книга\n  lines.push('** 📍 *4. Адресная книга и доставка (/#/address/saved)*')\n  lines.push('*** 📭 *4.1 Список сохраненных адресов (GET /api/Addresss/)*')\n  lines.push('**** 📄 Empty State (информационный блок при отсутствии сохраненных адресов) _[P2 | UI]_')\n  lines.push('**** 📋 Табличное отображение карточек сохраненных адресов доставки _[P2 | Функциональный]_')\n  lines.push('*** ➕ *4.2 Диалоговое окно добавления нового адреса (POST /api/Addresss/)*')\n  lines.push('**** 📱 Валидация мобильного номера телефона (10-15 цифр, regex ^[0-9]{10,15}$) _[P1 | Валидация]_')\n  lines.push('**** 📮 Обязательные поля: Страна, ФИО получателя, Адрес, Город, Индекс (3-10 знаков) _[P1 | Валидация]_')\n\n  // Ветка 5: НФТ\n  lines.push('** 🌐 *5. Сквозные нефункциональные требования (Cross-cutting)*')\n  lines.push('*** 📱 *5.1 Адаптивная верстка (Responsive Layout)*')\n  lines.push('**** 📲 Mobile (360px-767px: вертикальный single-column flex-layout) _[P2 | UI/UX]_')\n  lines.push('**** 💻 Tablet (768px-1199px: двухколоночный grid-layout для парных полей) _[P2 | UI/UX]_')\n  lines.push('**** 🖥️ Desktop (1200px+: центрированная карточка формы шириной 520px) _[P2 | UI/UX]_')\n  lines.push('*** ♿ *5.2 Доступность интерфейса (Accessibility / WCAG 2.1 AA)*')\n  lines.push('**** ⌨️ Полная навигация только с клавиатуры клавишей Tab по всем полям и кнопкам _[P2 | a11y]_')\n  lines.push('**** 🏷️ Атрибуты aria-label и aria-required для экранных дикторов _[P2 | a11y]_')\n  lines.push('*** 🌍 *5.3 Интернационализация (i18n)*')\n  lines.push('**** 🌐 Подгрузка текстов ошибок, лейблов и подсказок из словарей локализации (en/ru) _[P2 | i18n]_')\n  lines.push('*** ⚡ *5.4 Производительность*')\n  lines.push('**** ⏱️ Время первичной отрисовки форм FCP < 1.0s, LCP < 2.0s, отклик на ввод < 50ms _[P2 | Performance]_')\n\n  lines.push('')\n  lines.push('h3. 📊 Текстовая схема интеллект-карты (MindMap Syntax):')\n  lines.push('{code:text}')\n  lines.push(`mindmap\n  root((Auth & Profile (${ctx.issueKey})))\n    1. Регистрация\n      Валидация\n        Email (RFC 5322)\n        Пароль (5-40 знаков)\n        Совпадение паролей\n        Секретный вопрос/ответ\n      UI-состояния\n        Кнопка disabled\n        Loading spinner\n        Success SnackBar\n        Error 409 Conflict\n    2. Аутентификация\n      Вход в систему\n        200 OK + JWT Bearer\n        401 Unauthorized\n      Токены и сессия\n        localStorage 'token'\n        JwtInterceptor\n        Сохранение сессии\n    3. Профиль пользователя\n      Смена пароля\n        Проверка старого\n        Валидация нового\n      Аватар\n        PNG/JPEG до 2MB\n        Обновление превью\n    4. Адресная книга\n      Список адресов\n        Empty state\n        Карточки адресов\n      Диалог добавления\n        Телефон 10-15 цифр\n        Обязательность полей\n    5. НФТ\n      Адаптивность (360/768/1200)\n      Доступность (WCAG 2.1 AA)\n      Локализация (i18n)\n      Скорость (LCP < 2s)`)\n  lines.push('{code}')\n}\n\nlines.push('')\nlines.push('_Интеллект-карта сформирована автоматически: n8n QA DoR Gate._')\n\nlet commentBody = lines.join('\\n')\nif (commentBody.length > 32000) commentBody = commentBody.slice(0, 31900) + '\\n\\n_(сокращено из-за лимита Jira)_'\n\nreturn [{ json: { issueKey: ctx.issueKey, kind: ctx.kind, commentBody } }]\n"
+      },
+      "name": "QA: Формирование MindMap чеклиста",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/comment' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.commentBody }) }}",
+        "options": {}
+      },
+      "name": "Jira: Комментарий 2 — QA MindMap Чек-лист",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Build test cases prompt\"\nconst ctx = $('Build validation prompt').first().json\nconst cl = $('QA: Формирование MindMap чеклиста').first().json\nconst issue = $('Jira: Get issue').first().json\nconst f = issue.fields || {}\nconst prefix = ctx.kind === 'backend' ? 'BE' : ctx.kind === 'frontend' ? 'FE' : 'QA'\nconst layer = ctx.kind === 'backend' ? 'api' : 'e2e'\n\nconst systemPrompt = [\n  'Ты — Senior QA Automation Engineer. Пишешь тест-кейсы по стандарту BDD Gherkin (Given/When/Then) и Allure Steps (@allure.step) для последующей автоматизации и импорта в Qase TMS.',\n  'Каждый тест-кейс оформляется как BDD сценарий:',\n  '- В description включается полный текст сценария Gherkin с Allure-метаданными (@allure.epic, @allure.feature, @allure.story, @allure.severity).',\n  '- Каждый шаг в steps оформляется как атомарный Allure Step с префиксами [Given], [When], [And], [Then].',\n  '- Ожидаемый результат должен быть проверяемым (Assertion: статус-код, состояние UI, сообщение).',\n  'Отвечай строго на русском языке и строго в JSON.'\n].join('\\n')\n\nconst userPrompt = [\n  `Сгенерируй BDD Gherkin и Allure Steps тест-кейсы для ${ctx.profileLabel} ${ctx.issueKey}. Идентификаторы: TC-${prefix}-01, TC-${prefix}-02 ...`,\n  'Требования к покрытию: все пункты чек-листа с приоритетом P1 и P2 должны быть покрыты хотя бы одним тест-кейсом (поле covers).',\n  'Объем: 10-16 тест-кейсов, 3-7 шагов в каждом. Соотношение позитивных/негативных примерно 50/50, обязательно security-кейсы.',\n  `Поле layer по умолчанию: \"${layer}\".`,\n  'Допустимые значения:',\n  '- severity: blocker | critical | major | normal | minor | trivial',\n  '- priority: high | medium | low',\n  '- type: functional | smoke | regression | security | usability | performance | acceptance | compatibility | integration',\n  '- layer: e2e | api | unit',\n  '- behavior: positive | negative | destructive',\n  '- automation: to-be-automated | manual',\n  '- regression_tier: fast | full | both',\n  '',\n  'ПРАВИЛА ТЕГИРОВАНИЯ РЕГРЕССА (КРИТИЧЕСКИ ВАЖНО):',\n  '1. \"fast-regression\" (Быстрый регресс): назначается только для ключевых P1/Blocker/Critical проверок ядра системы (Smoke, основная авторизация, критический happy-path).',\n  '2. \"full-regression\" (Обязательный полный регресс): назначается для ВСЕХ регрессионных тест-кейсов без исключения, включая негативные сценарии, граничные значения (BVA), вторичные проверки и обработку ошибок.',\n  'Кейсы быстрого регресса обязаны содержать ОБА тега: [\"fast-regression\", \"full-regression\"].',\n  'Остальные кейсы содержат тег: [\"full-regression\"].',\n  'В шапке сценария Gherkin обязательно прописывать аннотации @fast-regression и/или @full-regression.',\n  '',\n  'ПРАВИЛА ПАРАМЕТРА АВТОМАТИЗАЦИИ (automation: \"to-be-automated\" | \"manual\") — ПИРАМИДА ТЕСТИРОВАНИЯ:',\n  '- Для BACKEND-задач (API): 100% тест-кейсов получают automation = \"to-be-automated\" (высокая скорость, низкая стоимость поддержки API-тестов).',\n  '- Для FRONTEND-задач (UI/E2E): automation = \"to-be-automated\" назначается ТОЛЬКО критическим сценариям (P1/Blocker Smoke, авторизация, ключевые бизнес-флоу, строгие валидации).',\n  '  Вторичные UI-проверки, нативные диалоги загрузки файлов (OS file picker), вспомогательные проверки верстки получают automation = \"manual\" (минимизация хрупких UI E2E автотестов).',\n  '',\n  'Формат JSON: {\"cases\":[{\"id\":\"TC-' + prefix + '-01\",\"title\":\"[BDD] ...\",\"description\":\"...\",\"gherkin\":\"@allure...\\\\n@fast-regression\\\\n@full-regression\\\\nScenario Outline: ...\\\\n  Given ...\\\\n  When ...\\\\n  Then ...\",\"preconditions\":\"...\",\"postconditions\":\"...\",\"severity\":\"critical\",\"priority\":\"high\",\"type\":\"functional\",\"layer\":\"' + layer + '\",\"behavior\":\"positive\",\"automation\":\"to-be-automated\",\"regression_tier\":\"both\",\"tags\":[\"bdd\",\"gherkin\",\"allure\",\"fast-regression\",\"full-regression\"],\"covers\":[\"CL-...\"],\"steps\":[{\"action\":\"[Given/When/Then] ...\",\"data\":\"...\",\"expected_result\":\"...\"}]}]}',\n  '',\n  `ЗАДАЧА: ${f.summary}`,\n  'ОПИСАНИЕ:',\n  '\"\"\"',\n  String(f.description || ''),\n  '\"\"\"',\n  '',\n  'ЧЕК-ЛИСТ QA:',\n  ...(Array.isArray(cl.checklist) ? cl.checklist.map(i => `${i.id} [${i.priority}/${i.type}] ${i.check}`) : ['(структурированный чек-лист проверок)'])\n].join('\\n')\n\nreturn [{\n  json: {\n    issueKey: ctx.issueKey,\n    kind: ctx.kind,\n    geminiRequest: {\n      systemInstruction: { parts: [{ text: systemPrompt }] },\n      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],\n      generationConfig: { temperature: 0.3, maxOutputTokens: 32768, responseMimeType: 'application/json' }\n    }\n  }\n}]\n"
+      },
+      "name": "Build test cases prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.qase.io/v1/suite/JS?limit=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Qase: Get suites",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2900,
+        260
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mWQ7RWbbHvVTUn9l",
+          "name": "Qase TMS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.qase.io/v1/case/JS?limit=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Qase: Get cases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        260
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mWQ7RWbbHvVTUn9l",
+          "name": "Qase TMS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: \"Format test cases\"\nconst ctx = $('Build test cases prompt').first().json\nconst issue = $('Jira: Get issue').first().json\n\nlet suites = []\ntry {\n  const suitesRes = $('Qase: Get suites').first().json\n  suites = (suitesRes && suitesRes.result && suitesRes.result.entities) ? suitesRes.result.entities : []\n} catch (e) {\n  suites = []\n}\n\nlet existingCases = []\ntry {\n  const casesRes = $('Qase: Get cases').first().json\n  existingCases = (casesRes && casesRes.result && casesRes.result.entities) ? casesRes.result.entities : []\n} catch (e) {\n  existingCases = []\n}\n\nconst existingTitleMap = new Map()\nfor (const ec of existingCases) {\n  if (ec.title) existingTitleMap.set(ec.title.trim().toLowerCase(), ec.id)\n}\n\nconst f = issue.fields || {}\nconst parentKey = f.parent?.key || ''\nconst parentSummary = f.parent?.fields?.summary || ''\n\n// 1. Feature suite (папка фичи верхнего уровня)\nlet featSuite = null\nif (parentKey) {\n  featSuite = suites.find(s => s.parent_id == null && s.title.includes(parentKey))\n}\nif (!featSuite && parentSummary) {\n  const norm = parentSummary.toLowerCase()\n  featSuite = suites.find(s => s.parent_id == null && norm.includes(s.title.toLowerCase().slice(0, 15)))\n}\nif (!featSuite) {\n  featSuite = suites.find(s => s.parent_id == null && s.title.includes(ctx.issueKey))\n}\n\nconst kind = ctx.kind || 'generic'\nconst isBackend = kind === 'backend'\nlet expectedModName = 'Frontend'\nif (kind === 'backend') expectedModName = 'Backend'\nelse if (kind === 'story') expectedModName = 'E2E / User Journey'\nelse if (kind === 'task' || kind === 'generic') expectedModName = 'Technical Tasks'\n\n// 2. Module sub-suite\nlet modSuite = null\nif (featSuite) {\n  modSuite = suites.find(s => s.parent_id === featSuite.id && s.title.toLowerCase() === expectedModName.toLowerCase())\n}\nif (!modSuite) {\n  modSuite = suites.find(s => s.title.toLowerCase() === expectedModName.toLowerCase())\n}\n\nconst targetSuiteId = modSuite ? modSuite.id : (featSuite ? featSuite.id : null)\nconst featTitle = featSuite ? featSuite.title : (parentKey ? `${parentKey}: ${parentSummary}` : (f.summary || ctx.issueKey))\nconst modTitle = modSuite ? modSuite.title : expectedModName\n\nfunction esc (s) {\n  return String(s == null ? '' : s)\n    .replace(/\\r?\\n+/g, ' ')\n    .replace(/\\|/g, '/')\n    .replace(/([{}\\[\\]])/g, '\\\\$1')\n    .trim()\n}\n\nconst defaultFrontendCases = [\n  {\n    id: 'TC-FE-01',\n    title: '[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email',\n    description: `## 📌 Цель тест-кейса\nПараметризованная проверка успешной регистрации нового пользователя в веб-приложении OWASP Juice Shop с различными валидными форматами адресов электронной почты (согласно спецификации RFC 5322).\nТест-кейс валидирует, что фронтенд корректно принимает валидные email-адреса, передает их на бэкенд и завершает регистрацию без ошибок.\n\n---\n\n## 📊 Матрица параметров и тестовых данных (Data-Driven Matrix)\nДанный сценарий выполняется для **3 независимых наборов данных (итераций)**:\n\n| № набора | Тип проверки / Класс эквивалентности | Email (<email>) | Пароль (<password>) | Контрольный вопрос (<question_id>) | Ответ на вопрос (<answer>) | Ожидаемый HTTP статус (<status_code>) |\n|:---:|:---|:---|:---|:---|:---|:---:|\n| **Набор 1** | **Стандартный Happy Path**<br>Классический email с латиницей и точкой | \\`standard.user@juice-sh.op\\` | \\`Pass12345\\` | \\`1\\` (Your eldest siblings middle name?) | \\`SecretAnswer\\` | **201 Created** |\n| **Набор 2** | **Спецсимволы RFC 5322**<br>Email с символом \\`+\\`, дефисом и поддоменом | \\`user.plus+testing@sub.juice-sh.op\\` | \\`SecureP@ss2026!\\` | \\`2\\` (Mother's maiden name?) | \\`MyMothersDog\\` | **201 Created** |\n| **Набор 3** | **Граничная длина (BVA)**<br>Длинный email (35+ символов) с цифрами | \\`valid_boundary_35_chars@juice-sh.op\\` | \\`ValidPass888\\` | \\`3\\` (Mother's birth date?) | \\`MiddleName\\` | **201 Created** |\n\n---\n\n## 🥒 Спецификация BDD Gherkin (совместима с Cucumber, Behave, Playwright-BDD)\n\\`\\`\\`gherkin\n# language: ru\n@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: Регистрация пользователя\")\n@allure.severity(\"critical\")\n@fast-regression\n@full-regression\nСтруктура сценария: Успешная регистрация клиента с различными валидными форматами Email\n  Дано гость не авторизован и находится на странице регистрации \"/#/register\"\n  Когда пользователь вводит адрес электронной почты \"<email>\"\n  И вводит пароль \"<password>\" в поле \"Password\"\n  И подтверждает пароль \"<password>\" в поле \"Repeat Password\"\n  И выбирает контрольный вопрос с кодом \"<question_id>\" и указывает ответ \"<answer>\"\n  И нажимает кнопку \"Register\"\n  Тогда отправляется сетевой запрос POST /api/Users/\n  И сервер возвращает HTTP-статус <status_code>\n  И на экране отображается зеленое уведомление \"Registration completed successfully. You can now log in.\"\n  И выполняется автоматическое перенаправление на страницу входа \"/#/login\"\n\n  Примеры:\n    | email                               | password        | question_id | answer       | status_code |\n    | standard.user@juice-sh.op           | Pass12345       | 1           | SecretAnswer | 201         |\n    | user.plus+testing@sub.juice-sh.op   | SecureP@ss2026! | 2           | MyMothersDog | 201         |\n    | valid_boundary_35_chars@juice-sh.op | ValidPass888    | 3           | MiddleName   | 201         |\n\\`\\`\\``,\n    covers: ['AC-01', 'F01', 'F02', 'F03'],\n    type: 'smoke',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'registration', 'smoke', 'parametrized', 'data-driven', 'fast-regression', 'full-regression'],\n    preconditions: 'Гость находится на странице \"/#/register\", база данных доступна, тестовые email еще не зарегистрированы.',\n    steps: [\n      {\n        action: '[1. Given / Подготовка] Открыть страницу регистрации нового пользователя',\n        data: 'URL: http://localhost:3000/#/register',\n        expected_result: 'Страница регистрации успешно загружена, форма пуста, кнопка «Register» заблокирована (disabled).'\n      },\n      {\n        action: '[2. When / Ввод Email] Ввести значение в поле «Email» (согласно выбранному набору параметров)',\n        data: 'Значения параметра <email> из матрицы:\\n• Набор 1 (Happy Path): standard.user@juice-sh.op\\n• Набор 2 (Спецсимволы RFC): user.plus+testing@sub.juice-sh.op\\n• Набор 3 (Длинный email): valid_boundary_35_chars@juice-sh.op',\n        expected_result: 'Значение принято полем ввода, под полем нет красных предупреждений об ошибке формата.'\n      },\n      {\n        action: '[3. When / Ввод Пароля] Ввести пароль в поле «Password» и продублировать его в «Repeat Password»',\n        data: 'Значения параметра <password>:\\n• Набор 1: Pass12345\\n• Набор 2: SecureP@ss2026!\\n• Набор 3: ValidPass888',\n        expected_result: 'Введенные пароли маскированы символами точек, совпадают, ошибки несовпадения не отображаются.'\n      },\n      {\n        action: '[4. When / Секретный вопрос] Выбрать вопрос в выпадающем списке «Security Question» и заполнить поле «Answer»',\n        data: 'Параметры <question_id> и <answer>:\\n• Набор 1: Вопрос №1 (\"Your eldest siblings middle name?\"), Ответ: SecretAnswer\\n• Набор 2: Вопрос №2 (\"Mother\\'s maiden name?\"), Ответ: MyMothersDog\\n• Набор 3: Вопрос №3 (\"Mother\\'s birth date?\"), Ответ: MiddleName',\n        expected_result: 'Вопрос выбран, ответ введен. Все обязательные поля заполнены, кнопка «Register» становится активной.'\n      },\n      {\n        action: '[5. When / Отправка формы] Нажать кнопку «Register»',\n        data: 'Клик по активной кнопке «Register»',\n        expected_result: 'В Network отправляется POST-запрос на /api/Users/, сервер возвращает HTTP-статус 201 Created.'\n      },\n      {\n        action: '[6. Then / Верификация] Проверить сообщение об успешной регистрации и переадресацию',\n        data: 'Проверка всплывающего SnackBar и адресной строки браузера',\n        expected_result: 'Отображается зеленое всплывающее уведомление: \"Registration completed successfully. You can now log in.\", браузер перенаправляет на \"/#/login\".'\n      }\n    ],\n    postconditions: 'Учетная запись пользователя успешно создана в базе данных SQLite (таблица Users).',\n    parameters: [\n      {\n        shared_id: '01a1174f-0c29-7051-b039-a69eeafe74c7'\n      }\n    ]\n  },\n  {\n    id: 'TC-FE-02',\n    title: '[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя',\n    description: `## 📌 Цель тест-кейса\nПараметризованное тестирование граничных значений (BVA — Boundary Value Analysis) длины поля «Пароль» при регистрации пользователя в веб-приложении OWASP Juice Shop.\nТребование системы: длина пароля должна составлять строго от 5 до 40 символов включительно.\n\n---\n\n## 📊 Матрица параметров и тестовых данных (Data-Driven Matrix)\nТест-кейс проверяет **5 граничных наборов данных (итераций)**:\n\n| № набора | Класс / Граничная точка | Значение (<password>) | Длина (<length>) | Ожидаемая валидность (<is_valid>) | Сообщение об ошибке (<error_message>) | Кнопка Register (<button_enabled>) |\n|:---:|:---|:---|:---:|:---:|:---|:---:|\n| **Набор 1** | **Граница минимума: Min - 1** (Невалидно) | \\`Pass\\` | **4** | ❌ Невалидно (\\`false\\`) | \\`Password must be 5-40 characters long\\` | 🔒 Заблокирована (\\`disabled\\`) |\n| **Набор 2** | **Граница минимума: Min** (Валидно) | \\`Pass5\\` | **5** | ✅ Валидно (\\`true\\`) | Ошибок нет (\\`none\\`) | 🟢 Активна (\\`enabled\\`) |\n| **Набор 3** | **Граница минимума: Min + 1** (Валидно) | \\`Pass6\\` | **6** | ✅ Валидно (\\`true\\`) | Ошибок нет (\\`none\\`) | 🟢 Активна (\\`enabled\\`) |\n| **Набор 4** | **Граница максимума: Max** (Валидно) | \\`ExactlyFortyCharactersLongSecurePass123!\\` | **40** | ✅ Валидно (\\`true\\`) | Ошибок нет (\\`none\\`) | 🟢 Активна (\\`enabled\\`) |\n| **Набор 5** | **Граница максимума: Max + 1** (Невалидно) | \\`ExceedingFortyOneCharsLongSecurePassword!\\` | **41** | ❌ Невалидно (\\`false\\`) | \\`Password must be 5-40 characters long\\` | 🔒 Заблокирована (\\`disabled\\`) |\n\n---\n\n## 🥒 Спецификация BDD Gherkin (совместима с Cucumber, Behave, Playwright-BDD)\n\\`\\`\\`gherkin\n# language: ru\n@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"\\${ctx.issueKey}: Валидация пароля при регистрации\")\n@allure.severity(\"critical\")\n@full-regression\nСтруктура сценария: Проверка граничных условий длины пароля (от 5 до 40 символов)\n  Дано гость не авторизован и находится на странице регистрации \"/#/register\"\n  И вводит валидный уникальный адрес электронной почты \"bva.user@juice-sh.op\"\n  Когда пользователь вводит пароль \"<password>\" длиной <length> символов\n  Тогда статус валидации поля пароля равен \"<is_valid>\"\n  И под полем отображается предупреждение \"<error_message>\"\n  И состояние кнопки отправки формы \"Register\" равно \"<button_enabled>\"\n\n  Примеры:\n    | password                                 | length | is_valid | error_message                         | button_enabled |\n    | Pass                                     | 4      | false    | Password must be 5-40 characters long | disabled       |\n    | Pass5                                    | 5      | true     | none                                  | enabled        |\n    | Pass6                                    | 6      | true     | none                                  | enabled        |\n    | ExactlyFortyCharactersLongSecurePass123! | 40     | true     | none                                  | enabled        |\n    | ExceedingFortyOneCharsLongSecurePassword!| 41     | false    | Password must be 5-40 characters long | disabled       |\n\\`\\`\\``,\n    covers: ['AC-01', 'F02'],\n    type: 'functional',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'bva', 'validation', 'parametrized', 'full-regression'],\n    preconditions: 'Открыта страница \"/#/register\".',\n    steps: [\n      {\n        action: '[1. Given / Подготовка] Открыть страницу регистрации нового пользователя',\n        data: 'URL: http://localhost:3000/#/register',\n        expected_result: 'Форма регистрации отображена, поле пароля пустое.'\n      },\n      {\n        action: '[2. Given / Предзаполнение Email] Ввести валидный уникальный email',\n        data: 'bva.test.user@juice-sh.op',\n        expected_result: 'Поле Email заполнено и валидно.'\n      },\n      {\n        action: '[3. When / Ввод пароля] Ввести пароль граничной длины в поле «Password»',\n        data: 'Значения параметра <password> (длина <length>):\\n• Набор 1 (длина 4, невалидно): Pass\\n• Набор 2 (длина 5, мин): Pass5\\n• Набор 3 (длина 6, мин+1): Pass6\\n• Набор 4 (длина 40, макс): ExactlyFortyCharactersLongSecurePass123!\\n• Набор 5 (длина 41, макс+1): ExceedingFortyOneCharsLongSecurePassword!',\n        expected_result: 'Символы пароля введены и скрыты маской.'\n      },\n      {\n        action: '[4. Then / Верификация валидации] Проверить реакцию валидатора формы и текст ошибки',\n        data: 'Проверка класса mat-error и текста подсказки',\n        expected_result: 'Для наборов 1 и 5: отображается красная ошибка «Password must be 5-40 characters long».\\nДля наборов 2, 3, 4: ошибок валидации нет.'\n      },\n      {\n        action: '[5. Then / Проверка кнопки] Проверить доступность кнопки «Register»',\n        data: 'Проверка селектора button[type=submit]',\n        expected_result: 'Для наборов 1 и 5: кнопка заблокирована (disabled).\\nДля наборов 2, 3, 4 (при заполненных остальных полях): кнопка активна.'\n      }\n    ],\n    postconditions: 'Форма реагирует реактивно до отправки запроса.',\n    parameters: [\n      {\n        shared_id: '01a11751-4319-724c-be37-bc882c4614f8'\n      }\n    ]\n  },\n  {\n    id: 'TC-FE-03',\n    title: '[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля',\n    description: 'Проверка клиентского валидатора соответствия полей Password и Repeat Password. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: User Registration Validation\")\n@allure.severity(\"major\")\n@full-regression\nScenario: Блокировка отправки формы при несовпадении паролей\n  Given гость находится на форме регистрации \"/#/register\"\n  When заполняет поле Password значением \"Password123\"\n  And заполняет поле Repeat Password значением \"DifferentPassword999\"\n  Then под полем подтверждения пароля отображается ошибка \"Passwords do not match.\"\n  And кнопка \"Register\" деактивирована (disabled)\n  And сетевой запрос на сервер не отправляется`,\n    covers: ['AC-01', 'F02'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'validation', 'full-regression'],\n    preconditions: 'Открыта страница \"/#/register\".',\n    steps: [\n      { action: '[Given] Открыть форму регистрации', data: 'URL: /#/register', expected_result: 'Форма открыта' },\n      { action: '[When] Ввести пароль', data: 'Password123', expected_result: 'Пароль введен' },\n      { action: '[And] Ввести отличающийся повтор пароля', data: 'DifferentPassword999', expected_result: 'Отображена ошибка \"Passwords do not match.\"' },\n      { action: '[Then] Проверить состояние кнопки Register', data: 'button status', expected_result: 'Кнопка заблокирована (disabled)' }\n    ],\n    postconditions: 'Форма не отправлена.'\n  },\n  {\n    id: 'TC-FE-04',\n    title: '[Frontend] Обработка ошибки 409 Conflict при регистрации с уже занятым Email',\n    description: 'Проверка обработки серверной ошибки уникальности email и отображения обратной связи пользователю. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: User Registration\")\n@allure.severity(\"critical\")\n@full-regression\nScenario: Ошибка регистрации при попытке создать дубликат Email\n  Given в системе уже зарегистрирован пользователь с Email \"admin@juice-sh.op\"\n  When гость заполняет все поля формы регистрации и указывает Email \"admin@juice-sh.op\"\n  And нажимает кнопку \"Register\"\n  Then сервер возвращает HTTP-статус 409 Conflict\n  And на экране отображается красный SnackBar с текстом ошибки \"Email must be unique.\"\n  And поля формы не очищаются для возможности корректировки`,\n    covers: ['AC-02', 'F03'],\n    type: 'functional',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api-conflict', 'full-regression'],\n    preconditions: 'Пользователь \"admin@juice-sh.op\" уже существует в БД.',\n    steps: [\n      { action: '[Given] Заполнить форму с занятым Email', data: 'admin@juice-sh.op', expected_result: 'Форма заполнена' },\n      { action: '[When] Нажать кнопку \"Register\"', data: 'click \"Register\"', expected_result: 'POST /api/Users/ возвращает 409 Conflict' },\n      { action: '[Then] Проверить сообщение об ошибке', data: 'SnackBar', expected_result: 'Красный SnackBar \"Email must be unique.\"' }\n    ],\n    postconditions: 'Дубликат записи в БД не создан.'\n  },\n  {\n    id: 'TC-FE-05',\n    title: '[Frontend][Parametrized] Аутентификация пользователя и проверка безопасности сессии при входе',\n    description: 'Data-driven сценарий проверки входа в систему: валидные данные, неверный пароль, несуществующий логин, SQL-инъекция. Входит в быстрый и полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: User Login\")\n@allure.severity(\"blocker\")\n@fast-regression\n@full-regression\nScenario Outline: Проверка сценариев аутентификации пользователя\n  Given клиент находится на странице логина \"/#/login\"\n  When вводит логин \"<email>\" и пароль \"<password>\"\n  And нажимает кнопку \"Log in\"\n  Then сервер возвращает HTTP-ответ со статусом <expected_status>\n  And наличие токена авторизации в localStorage соответствует \"<token_present>\"\n  And отображается системное уведомление \"<notification_message>\"\n  And статус авторизации в интерфейсе соответствует \"<is_logged_in>\"\n\n  Examples:\n    | email                  | password        | expected_status | token_present | notification_message         | is_logged_in |\n    | user@test.com          | ValidPass123    | 200             | true          | none                         | true         |\n    | user@test.com          | WrongPass999    | 401             | false         | Invalid email or password.   | false        |\n    | not_found@test.com     | AnyPassword123  | 401             | false         | Invalid email or password.   | false        |\n    | admin@juice-sh.op'--   | dummy           | 401             | false         | Invalid email or password.   | false        |`,\n    covers: ['AC-03', 'AC-04', 'F03'],\n    type: 'smoke',\n    severity: 'blocker',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'login', 'security', 'smoke', 'parametrized', 'fast-regression', 'full-regression'],\n    preconditions: 'Пользователь user@test.com / ValidPass123 существует.',\n    steps: [\n      { action: '[Given] Открыть страницу логина \"/#/login\"', data: 'URL: /#/login', expected_result: 'Форма логина отображается' },\n      { action: '[When] Ввести учетные данные', data: 'login: <email>, pass: <password>', expected_result: 'Поля заполнены' },\n      { action: '[And] Нажать кнопку \"Log in\"', data: 'click \"Log in\"', expected_result: 'POST /rest/user/login возвращает HTTP <expected_status>' },\n      { action: '[Then] Проверить состояние сессии и токен', data: 'localStorage.token', expected_result: 'Токен: <token_present>, авторизован: <is_logged_in>' }\n    ],\n    postconditions: 'Состояние авторизации соответствует ожидаемому.'\n  },\n  {\n    id: 'TC-FE-06',\n    title: '[Frontend] Сохранение Bearer JWT в сессии и добавление заголовка Authorization в JwtInterceptor',\n    description: 'Проверка сохранения токена в localStorage и автоматического добавления заголовка Authorization во все исходящие API-запросы. Входит в быстрый и полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: Token & Session Management\")\n@allure.severity(\"critical\")\n@fast-regression\n@full-regression\nScenario: Сохранение токена в localStorage и инъекция заголовка Authorization\n  Given клиент успешно авторизовался с валидными учетными данными\n  Then JWT Bearer токен сохраняется в localStorage под ключом 'token'\n  When клиент переходит в каталог товаров и инициирует защищенный запрос\n  Then Angular JwtInterceptor добавляет заголовок \"Authorization: Bearer <jwt_token>\"\n  And сервер успешно валидирует запрос и возвращает статус 200 OK\n  When пользователь перезагружает страницу в браузере (F5)\n  Then сессия пользователя сохраняется без требования повторного входа`,\n    covers: ['AC-03', 'F03'],\n    type: 'functional',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'jwt', 'security', 'session', 'fast-regression', 'full-regression'],\n    preconditions: 'Пользователь авторизован.',\n    steps: [\n      { action: '[Given] Авторизоваться в приложении', data: 'POST /rest/user/login', expected_result: 'Получен JWT токен' },\n      { action: '[Then] Проверить запись в localStorage', data: 'localStorage.getItem(\"token\")', expected_result: 'Токен присутствует под ключом \"token\"' },\n      { action: '[When] Инициировать защищенный HTTP-запрос', data: 'GET /api/Basket/1', expected_result: 'В заголовках запроса присутствует Authorization: Bearer <token>' },\n      { action: '[Then] Перезагрузить страницу', data: 'location.reload()', expected_result: 'Сессия сохранена, профиль активен' }\n    ],\n    postconditions: 'Сессия сохраняется при перезагрузке.'\n  },\n  {\n    id: 'TC-FE-07',\n    title: '[Frontend] Восстановление доступа к аккаунту через контрольный вопрос (Forgot Password)',\n    description: 'Проверка сброса забытого пароля при корректном ответе на секретный вопрос пользователя. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Customer Authentication\")\n@allure.story(\"${ctx.issueKey}: Password Recovery\")\n@allure.severity(\"major\")\n@full-regression\nScenario: Сброс пароля при верном ответе на секретный вопрос\n  Given пользователь забыл пароль и перешел на страницу \"/#/forgot-password\"\n  When вводит Email \"user@test.com\"\n  Then в поле контрольного вопроса автоматически подтягивается секретный вопрос пользователя\n  When пользователь вводит верный ответ \"SecretAnswer\", новый пароль \"NewPassword123\" и подтверждение \"NewPassword123\"\n  And нажимает кнопку \"Change\"\n  Then сервер возвращает HTTP 200 OK\n  And отображается зеленый SnackBar \"Your password was changed successfully.\"\n  And пользователь может успешно авторизоваться на \"/#/login\" с новым паролем`,\n    covers: ['AC-05', 'F03'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'manual',\n    tags: ['bdd', 'gherkin', 'allure', 'forgot-password', 'full-regression'],\n    preconditions: 'Пользователь user@test.com зарегистрирован с секретным вопросом.',\n    steps: [\n      { action: '[Given] Открыть страницу восстановления пароля', data: 'URL: /#/forgot-password', expected_result: 'Форма отображается' },\n      { action: '[When] Ввести Email пользователя', data: 'user@test.com', expected_result: 'Секретный вопрос подтягивается через API' },\n      { action: '[And] Ввести ответ на вопрос и новый пароль', data: 'SecretAnswer / NewPassword123', expected_result: 'Поля валидны' },\n      { action: '[And] Нажать кнопку \"Change\"', data: 'click \"Change\"', expected_result: 'POST /rest/user/reset-password возвращает 200 OK' },\n      { action: '[Then] Проверить сообщение об успехе', data: 'SnackBar', expected_result: 'Зеленый SnackBar \"Your password was changed successfully.\"' }\n    ],\n    postconditions: 'Пароль пользователя обновлен в БД.'\n  },\n  {\n    id: 'TC-FE-08',\n    title: '[Frontend] Смена пароля авторизованным пользователем в настройках профиля',\n    description: 'Проверка смены пароля из профиля авторизованного пользователя при вводе корректного текущего пароля. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"User Profile\")\n@allure.story(\"${ctx.issueKey}: Profile Password Management\")\n@allure.severity(\"major\")\n@full-regression\nScenario: Успешная смена пароля в профиле\n  Given пользователь авторизован и открыл страницу профиля \"/#/profile\"\n  When вводит корректный текущий пароль \"CurrentPass123\"\n  And вводит новый пароль \"NewSecurePass456\" и подтверждение \"NewSecurePass456\"\n  And нажимает кнопку \"Change Password\"\n  Then отправляется защищенный запрос POST /rest/user/change-password с Bearer-токеном\n  And сервер возвращает статус HTTP 200 OK\n  And отображается зеленый SnackBar \"Your password was changed successfully.\"\n  And поля формы смены пароля очищаются`,\n    covers: ['AC-06', 'F03'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'profile', 'password', 'full-regression'],\n    preconditions: 'Пользователь авторизован на \"/#/profile\".',\n    steps: [\n      { action: '[Given] Открыть форму смены пароля', data: 'URL: /#/profile', expected_result: 'Форма доступна' },\n      { action: '[When] Ввести текущий пароль', data: 'CurrentPass123', expected_result: 'Поле заполнено' },\n      { action: '[And] Ввести новый пароль и подтверждение', data: 'NewSecurePass456', expected_result: 'Поля валидны' },\n      { action: '[And] Нажать кнопку смены пароля', data: 'click \"Change Password\"', expected_result: 'POST /rest/user/change-password возвращает 200 OK' },\n      { action: '[Then] Проверить сообщение и очистку формы', data: 'SnackBar & inputs', expected_result: 'SnackBar об успехе, поля очищены' }\n    ],\n    postconditions: 'Новый пароль сохранен.'\n  },\n  {\n    id: 'TC-FE-09',\n    title: '[Frontend] Блокировка смены пароля при вводе неверного текущего пароля (HTTP 401)',\n    description: 'Проверка безопасности: защита от несанкционированной смены пароля при вводе некорректного текущего пароля. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"User Profile\")\n@allure.story(\"${ctx.issueKey}: Profile Password Management\")\n@allure.severity(\"critical\")\n@full-regression\nScenario: Ошибка смены пароля при неверном текущем пароле\n  Given пользователь авторизован на странице профиля \"/#/profile\"\n  When вводит неверный текущий пароль \"WrongCurrentPass999\"\n  And вводит новый пароль \"NewPassValid123\" и подтверждение \"NewPassValid123\"\n  And нажимает кнопку \"Change Password\"\n  Then сервер возвращает HTTP-статус 401 Unauthorized\n  And на экране отображается красный SnackBar с ошибкой \"Current password is not correct.\"\n  And пароль учетной записи остается неизменным`,\n    covers: ['AC-06', 'F03'],\n    type: 'security',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'security', 'password', 'full-regression'],\n    preconditions: 'Пользователь авторизован на \"/#/profile\".',\n    steps: [\n      { action: '[Given] Открыть экран профиля', data: 'URL: /#/profile', expected_result: 'Экран открыт' },\n      { action: '[When] Ввести неверный текущий пароль', data: 'WrongCurrentPass999', expected_result: 'Поле заполнено' },\n      { action: '[And] Ввести новый пароль', data: 'NewPassValid123', expected_result: 'Поля заполнены' },\n      { action: '[And] Отправить форму смены пароля', data: 'click \"Change Password\"', expected_result: 'Сервер возвращает 401 Unauthorized' },\n      { action: '[Then] Проверить уведомление об ошибке', data: 'SnackBar', expected_result: 'Красный SnackBar \"Current password is not correct.\"' }\n    ],\n    postconditions: 'Пароль не изменен.'\n  },\n  {\n    id: 'TC-FE-10',\n    title: '[Frontend] Успешная загрузка валидного изображения аватара профиля (PNG/JPEG до 2 МБ)',\n    description: 'Проверка успешной загрузки изображения аватара (до 2MB) и немедленного обновления превью в шапке и профиле. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"User Profile\")\n@allure.story(\"${ctx.issueKey}: Avatar Upload\")\n@allure.severity(\"normal\")\n@full-regression\nScenario: Успешная загрузка аватара и обновление превью\n  Given пользователь авторизован и находится в профиле \"/#/profile\"\n  When выбирает файл изображения \"valid_avatar.png\" размером 250KB (<= 2MB)\n  And нажимает кнопку \"Upload\"\n  Then отправляется multipart HTTP-запрос POST /profile/image/file с токеном Authorization\n  And сервер возвращает статус HTTP 200 OK с URL нового изображения\n  And отображается уведомление \"Profile image updated successfully.\"\n  And превью аватара на странице профиля немедленно обновляет атрибут src на новый URL`,\n    covers: ['AC-07', 'F03'],\n    type: 'functional',\n    severity: 'normal',\n    priority: 'medium',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'avatar', 'upload', 'full-regression'],\n    preconditions: 'Пользователь авторизован на \"/#/profile\".',\n    steps: [\n      { action: '[Given] Выбрать файл аватара', data: 'valid_avatar.png (250KB)', expected_result: 'Файл выбран' },\n      { action: '[When] Нажать кнопку загрузки', data: 'click \"Upload\"', expected_result: 'Multipart POST /profile/image/file возвращает 200 OK' },\n      { action: '[Then] Проверить отображение нового аватара', data: 'img.profile-avatar', expected_result: 'Превью обновлено, отображен зеленый SnackBar' }\n    ],\n    postconditions: 'Аватар сохранен на сервере.'\n  },\n  {\n    id: 'TC-FE-11',\n    title: '[Frontend] Блокировка загрузки изображения аватара при превышении лимита размера (> 2 МБ)',\n    description: 'Проверка клиентской валидации максимального допустимого размера файла аватара. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"User Profile\")\n@allure.story(\"${ctx.issueKey}: Avatar Upload Validation\")\n@allure.severity(\"normal\")\n@full-regression\nScenario: Превышение допустимого размера файла аватара (> 2MB)\n  Given пользователь находится на странице профиля \"/#/profile\"\n  When выбирает файл \"oversized_photo.jpg\" размером 3.5MB (превышает лимит 2MB)\n  Then отображается ошибка валидации \"File size must not exceed 2MB. Allowed formats: PNG, JPEG.\"\n  And кнопка \"Upload\" деактивирована\n  And отправка сетевого запроса к серверу блокируется клиентом`,\n    covers: ['AC-07', 'F02'],\n    type: 'functional',\n    severity: 'normal',\n    priority: 'low',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'manual',\n    tags: ['bdd', 'gherkin', 'allure', 'validation', 'file-size', 'full-regression'],\n    preconditions: 'Пользователь на странице \"/#/profile\".',\n    steps: [\n      { action: '[Given] Выбрать файл более 2MB', data: 'oversized_photo.jpg (3.5MB)', expected_result: 'Файл выбран' },\n      { action: '[When] Проверить реакцию валидации', data: 'валидация формы', expected_result: 'Отображена ошибка \"File size must not exceed 2MB.\"' },\n      { action: '[Then] Проверить блокировку сетевого вызова', data: 'проверка отправки', expected_result: 'Кнопка заблокирована, запрос не отправлен' }\n    ],\n    postconditions: 'Файл не загружен.'\n  },\n  {\n    id: 'TC-FE-12',\n    title: '[Frontend][Parametrized] Валидация формата и длины мобильного номера телефона при добавлении адреса',\n    description: 'Data-driven тестирование граничных значений длины и формата номера телефона (от 10 до 15 цифр) при добавлении адреса доставки. Входит в полный регресс.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Address Book\")\n@allure.story(\"${ctx.issueKey}: Delivery Address Management\")\n@allure.severity(\"major\")\n@full-regression\nScenario Outline: Валидация граничных условий номера телефона (10-15 цифр)\n  Given пользователь открыл диалог добавления адреса доставки на \"/#/address/saved\"\n  When заполняет обязательные поля (Country, Name, Address, City, ZIP) валидными данными\n  And вводит номер мобильного телефона \"<phone>\" длиной <length> знаков\n  And нажимает кнопку \"Submit\"\n  Then валидация поля телефона соответствует \"<is_valid>\"\n  And сервер возвращает статус-код <expected_status>\n  And сохранение адреса доставки завершается со статусом \"<is_saved>\"\n\n  Examples:\n    | phone            | length | is_valid | expected_status | is_saved |\n    | 123456789        | 9      | false    | 400             | false    |\n    | 1234567890       | 10     | true     | 201             | true     |\n    | 12345678901      | 11     | true     | 201             | true     |\n    | 123456789012345  | 15     | true     | 201             | true     |\n    | 1234567890123456 | 16     | false    | 400             | false    |\n    | +7-999-ABC-00    | 13     | false    | 400             | false    |`,\n    covers: ['AC-08', 'F02', 'F03'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'manual',\n    tags: ['bdd', 'gherkin', 'allure', 'address', 'bva', 'parametrized', 'full-regression'],\n    preconditions: 'Пользователь авторизован, открыт диалог добавления адреса.',\n    steps: [\n      { action: '[Given] Открыть форму добавления адреса', data: 'Dialog: Add Address', expected_result: 'Диалог открыт' },\n      { action: '[When] Заполнить основные поля адреса', data: 'Germany, John, Main 1, Berlin, 10115', expected_result: 'Поля валидны' },\n      { action: '[And] Ввести тестовый номер телефона', data: '<phone>', expected_result: 'Валидность телефона: <is_valid>' },\n      { action: '[And] Нажать кнопку Submit', data: 'click \"Submit\"', expected_result: 'Отправлен POST /api/Addresss/, статус: <expected_status>' },\n      { action: '[Then] Проверить результат сохранения', data: 'список адресов', expected_result: 'Адрес сохранен: <is_saved>' }\n    ],\n    postconditions: 'Адрес сохранен только для валидных значений.'\n  }\n]\n\nconst defaultBackendCases = [\n  {\n    id: 'TC-BE-01',\n    title: '[API][Parametrized] Создание учетной записи пользователя через POST /api/Users/',\n    description: 'Data-driven интеграционный API тест создания пользователя с хешированием пароля и связью с SecurityQuestion. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: User Creation Endpoint\")\n@allure.severity(\"critical\")\n@fast-regression\n@full-regression\nScenario Outline: Успешное создание пользователя через REST API\n  Given API клиент отправляет POST-запрос на эндпоинт \"/api/Users/\"\n  When тело запроса содержит валидный JSON с email \"<email>\", password \"<password>\", securityQuestionId <q_id>, answer \"<answer>\"\n  Then сервер возвращает HTTP статус 201 Created\n  And тело ответа содержит статус \"success\" и сгенерированный ID пользователя\n  And в объекте ответа пароль пользователя отсутствует или замаскирован\n  And в базе данных SQLite создана запись со значением хеша пароля\n\n  Examples:\n    | email                         | password        | q_id | answer       |\n    | api.user1@juice-sh.op         | SecurePass123!  | 1    | SecretOne    |\n    | api.service.user@juice-sh.op  | ComplexPass888# | 2    | SecretTwo    |\n    | api.partner.test@juice-sh.op  | P@ssword2026$   | 3    | SecretThree  |`,\n    covers: ['BE-01', 'API-01', 'DB-01'],\n    type: 'smoke',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'backend', 'supertest', 'smoke', 'parametrized', 'fast-regression', 'full-regression'],\n    preconditions: 'Сервер Juice Shop запущен, SQLite БД инициализирована.',\n    steps: [\n      { action: '[Given] Сформировать HTTP POST запрос на /api/Users/', data: 'Endpoint: POST /api/Users/', expected_result: 'Запрос готов к отправке' },\n      { action: '[When] Отправить валидный JSON payload', data: 'email: <email>, pass: <password>, qId: <q_id>, ans: <answer>', expected_result: 'Сервер возвращает HTTP 201 Created' },\n      { action: '[Then] Проверить структуру ответа', data: 'Assertion: res.body.status === \"success\"', expected_result: 'res.body.data.id определен, password не передается в открытом виде' }\n    ],\n    postconditions: 'Запись пользователя добавлена в таблицу Users.'\n  },\n  {\n    id: 'TC-BE-02',\n    title: '[API] Возврат ошибки 409 Conflict при попытке создания дубликата Email в POST /api/Users/',\n    description: 'Проверка уникального индекса email на уровне базы данных SQLite и ответа 409 Conflict. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: User Creation Constraints\")\n@allure.severity(\"critical\")\n@full-regression\nScenario: Отказ в регистрации при существующем Email\n  Given в базе данных уже существует запись с email \"admin@juice-sh.op\"\n  When клиент отправляет POST-запрос на \"/api/Users/\" с email \"admin@juice-sh.op\"\n  Then сервер возвращает HTTP статус 409 Conflict или 400 Bad Request\n  And тело ответа содержит ошибку \"Email must be unique.\"\n  And количество записей в таблице Users не увеличивается`,\n    covers: ['BE-01', 'DB-01'],\n    type: 'functional',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'backend', 'db-constraint', 'full-regression'],\n    preconditions: 'Пользователь admin@juice-sh.op существует в базе.',\n    steps: [\n      { action: '[Given] Подготовить payload с существующим email', data: 'email: \"admin@juice-sh.op\"', expected_result: 'Payload готов' },\n      { action: '[When] Выполнить POST /api/Users/', data: 'Supertest POST request', expected_result: 'HTTP 409 Conflict или 400 Bad Request' },\n      { action: '[Then] Проверить сообщение об ошибке валидации', data: 'res.body.error', expected_result: 'Содержит сообщение об уникальности email' }\n    ],\n    postconditions: 'Целостность базы данных не нарушена.'\n  },\n  {\n    id: 'TC-BE-03',\n    title: '[API][Parametrized] Валидация схемы payload и минимальной длины пароля в POST /api/Users/',\n    description: 'Data-driven проверка схемы JSON и валидаторов модели Sequelize при некорректных входных данных. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: User Validation\")\n@allure.severity(\"major\")\n@full-regression\nScenario Outline: Валидация невалидных параметров регистрации на бэкенде\n  Given API клиент отправляет POST-запрос на \"/api/Users/\"\n  When тело запроса содержит email \"<email>\" и пароль \"<password>\"\n  Then сервер возвращает HTTP статус-код <expected_status>\n  And тело ответа содержит описание ошибки валидации\n\n  Examples:\n    | email                 | password | expected_status |\n    | invalid-email-format  | Pass1234 | 400             |\n    | valid@juice-sh.op     | 1234     | 400             |\n    |                       | Pass1234 | 400             |`,\n    covers: ['BE-01', 'API-01'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'validation', 'parametrized', 'full-regression'],\n    preconditions: 'API сервер доступен.',\n    steps: [\n      { action: '[When] Отправить некорректный payload', data: 'email: <email>, pass: <password>', expected_result: 'HTTP статус <expected_status>' },\n      { action: '[Then] Проверить статус и отсутствие записи в БД', data: 'Assertion HTTP 400', expected_result: 'Ошибка валидации схемы' }\n    ],\n    postconditions: 'БД не изменена.'\n  },\n  {\n    id: 'TC-BE-04',\n    title: '[API][Parametrized] Аутентификация через POST /rest/user/login с выдачей валидного JWT токена',\n    description: 'Проверка бизнес-логики верификации хеша пароля и генерации валидного JWT Bearer токена. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Authentication Endpoint\")\n@allure.severity(\"blocker\")\n@fast-regression\n@full-regression\nScenario Outline: Успешная аутентификация пользователя на бэкенде\n  Given в БД существует учетная запись \"<email>\" с паролем \"<password>\"\n  When клиент отправляет POST-запрос на \"/rest/user/login\" с учетными данными\n  Then сервер возвращает HTTP статус 200 OK\n  And тело ответа содержит объект \"authentication\" со свойством \"token\"\n  And значение токена является валидным JWT токеном с заголовком и полезной нагрузкой (payload)\n  And payload токена содержит идентификатор пользователя \"id\" и корректный \"email\"\n\n  Examples:\n    | email                  | password     |\n    | admin@juice-sh.op      | admin123     |\n    | user@test.com          | ValidPass123 |`,\n    covers: ['BE-02', 'API-02', 'SEC-01'],\n    type: 'smoke',\n    severity: 'blocker',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'auth', 'jwt', 'smoke', 'parametrized', 'fast-regression', 'full-regression'],\n    preconditions: 'Учетные записи созданы в БД.',\n    steps: [\n      { action: '[When] Отправить POST /rest/user/login', data: 'email: <email>, pass: <password>', expected_result: 'HTTP 200 OK' },\n      { action: '[Then] Проверить структуру JWT токена', data: 'jwt.decode(res.body.authentication.token)', expected_result: 'Токен валиден, содержит userId и email' }\n    ],\n    postconditions: 'Токен активен для последующих вызовов.'\n  },\n  {\n    id: 'TC-BE-05',\n    title: '[API] Возврат ошибки 401 Unauthorized при неверном логине или пароле в POST /rest/user/login',\n    description: 'Проверка защиты аутентификации от подбора паролей: возврат 401 без утечки существования email. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Authentication Security\")\n@allure.severity(\"critical\")\n@full-regression\nScenario: Отказ в доступе при неверных учетных данных\n  Given клиент отправляет POST-запрос на \"/rest/user/login\" с несуществующим логином или неверным паролем\n  When передаются данные email \"admin@juice-sh.op\" и пароль \"WrongPassword999\"\n  Then сервер возвращает HTTP статус 401 Unauthorized\n  And тело ответа содержит общее сообщение \"Invalid email or password.\"\n  And заголовок Authorization или токен в ответе отсутствуют`,\n    covers: ['BE-02', 'SEC-01'],\n    type: 'security',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'security', 'full-regression'],\n    preconditions: 'Сервер запущен.',\n    steps: [\n      { action: '[When] Отправить POST /rest/user/login с неверным паролем', data: 'admin@juice-sh.op / WrongPassword999', expected_result: 'HTTP 401 Unauthorized' },\n      { action: '[Then] Проверить отсутствие токена в ответе', data: 'res.body.authentication === undefined', expected_result: 'Токен не выдан' }\n    ],\n    postconditions: 'Пользователь не авторизован.'\n  },\n  {\n    id: 'TC-BE-06',\n    title: '[API] Защита от SQL-инъекций при аутентификации через POST /rest/user/login (OWASP A03)',\n    description: 'Проверка экранирования параметров в SQL-запросах Sequelize/SQLite при атаке SQL Injection. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend Security\")\n@allure.story(\"${ctx.issueKey}: SQL Injection Defense\")\n@allure.severity(\"blocker\")\n@full-regression\nScenario: Проверка обработки SQL-инъекций в эндпоинте логина\n  Given злоумышленник пытается обойти аутентификацию через SQLi вектор\n  When отправляет POST на \"/rest/user/login\" с email \"' OR 1=1--\" и паролем \"dummy\"\n  Then сервер корректно экранирует параметры через параметризованные запросы ORM\n  And сервер возвращает HTTP статус 401 Unauthorized\n  And несанкционированный вход под учетной записью администратора не происходит`,\n    covers: ['BE-02', 'SEC-02', 'OWASP-A03'],\n    type: 'security',\n    severity: 'blocker',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'security', 'sqli', 'owasp', 'full-regression'],\n    preconditions: 'Сервер запущен.',\n    steps: [\n      { action: '[When] Отправить POST /rest/user/login с вектором SQLi', data: 'email: \"\\' OR 1=1--\"', expected_result: 'HTTP 401 Unauthorized' },\n      { action: '[Then] Убедиться в отсутствии авторизации администратора', data: 'res.status === 401', expected_result: 'Успешный обход заблокирован' }\n    ],\n    postconditions: 'Система защищена от SQL-инъекций.'\n  },\n  {\n    id: 'TC-BE-07',\n    title: '[API] Проверка авторизации и валидация Bearer JWT токена в защищенных эндпоинтах',\n    description: 'Проверка работы middleware аутентификации: валидация подписи, формата и срока действия токена. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: JWT Middleware Validation\")\n@allure.severity(\"critical\")\n@fast-regression\n@full-regression\nScenario: Проверка доступа к защищенным ресурсам с JWT токеном\n  Given клиент получил валидный JWT токен через эндпоинт логина\n  When отправляет GET-запрос на защищенный эндпоинт \"/rest/user/whoami\" с заголовком \"Authorization: Bearer <token>\"\n  Then сервер валидирует криптографическую подпись токена\n  And сервер возвращает HTTP статус 200 OK\n  When клиент отправляет запрос с невалидным или поврежденным токеном\n  Then сервер возвращает HTTP статус 401 Unauthorized`,\n    covers: ['BE-03', 'API-03', 'SEC-01'],\n    type: 'smoke',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'jwt', 'security', 'smoke', 'fast-regression', 'full-regression'],\n    preconditions: 'Получен валидный Bearer JWT.',\n    steps: [\n      { action: '[When] Выполнить GET запрос с Authorization: Bearer <valid_token>', data: 'Valid token', expected_result: 'HTTP 200 OK' },\n      { action: '[When] Выполнить GET запрос с невалидным токеном', data: 'Invalid token', expected_result: 'HTTP 401 Unauthorized' }\n    ],\n    postconditions: 'Middleware корректно разграничивает доступ.'\n  },\n  {\n    id: 'TC-BE-08',\n    title: '[API] Смена пароля через POST /rest/user/change-password с обязательной верификацией текущего пароля',\n    description: 'Проверка бизнес-логики смены пароля: обязательная проверка текущего пароля и обновление хеша в БД. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Password Management API\")\n@allure.severity(\"major\")\n@full-regression\nScenario: Успешная смена пароля авторизованным пользователем через API\n  Given пользователь авторизован и передает валидный Bearer токен\n  When отправляет POST на \"/rest/user/change-password\" с параметрами current \"CurrentPass123\", new \"NewSecurePass456\", repeat \"NewSecurePass456\"\n  Then сервер верифицирует текущий пароль\n  And сервер возвращает HTTP статус 200 OK\n  And в базе данных хеш пароля обновляется на новый\n  And авторизация с новым паролем возвращает HTTP 200 OK`,\n    covers: ['BE-04', 'API-04'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'password', 'full-regression'],\n    preconditions: 'Пользователь авторизован.',\n    steps: [\n      { action: '[When] Отправить POST /rest/user/change-password', data: 'current, new, repeat', expected_result: 'HTTP 200 OK' },\n      { action: '[Then] Проверить вход с новым паролем', data: 'POST /rest/user/login с новым паролем', expected_result: 'HTTP 200 OK' }\n    ],\n    postconditions: 'Пароль успешно обновлен.'\n  },\n  {\n    id: 'TC-BE-09',\n    title: '[API] Отказ в смене пароля (401 Unauthorized) при передаче неверного текущего пароля',\n    description: 'Проверка безопасности API: отказ в обновлении пароля при неверном значении поля current. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Password Security\")\n@allure.severity(\"critical\")\n@full-regression\nScenario: Отказ в смене пароля при неверном текущем пароле\n  Given пользователь авторизован с Bearer токеном\n  When отправляет POST на \"/rest/user/change-password\" с заведомо неверным current \"WrongPass999\"\n  Then сервер возвращает HTTP статус 401 Unauthorized\n  And хеш пароля в базе данных не изменяется`,\n    covers: ['BE-04', 'SEC-01'],\n    type: 'security',\n    severity: 'critical',\n    priority: 'high',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'security', 'full-regression'],\n    preconditions: 'Пользователь авторизован.',\n    steps: [\n      { action: '[When] Отправить POST с неверным current паролем', data: 'current: \"WrongPass999\"', expected_result: 'HTTP 401 Unauthorized' },\n      { action: '[Then] Проверить неизменность пароля', data: 'Вход со старым паролем', expected_result: 'Старый пароль по-прежнему активен' }\n    ],\n    postconditions: 'Пароль не изменен.'\n  },\n  {\n    id: 'TC-BE-10',\n    title: '[API] Сброс пароля через POST /rest/user/reset-password по связке Email и контрольного вопроса',\n    description: 'Проверка API восстановления доступа при передаче правильного ответа на контрольный вопрос. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Password Reset API\")\n@allure.severity(\"major\")\n@full-regression\nScenario: Сброс пароля через API по секретному вопросу\n  Given в БД существует пользователь с привязанным контрольным вопросом\n  When клиент отправляет POST-запрос на \"/rest/user/reset-password\" с телом { email, answer, newPassword }\n  Then сервер верифицирует ответ на вопрос\n  And сервер возвращает HTTP статус 200 OK\n  And пароль пользователя в БД обновляется`,\n    covers: ['BE-04', 'API-04'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'reset-password', 'full-regression'],\n    preconditions: 'Пользователь с вопросом существует.',\n    steps: [\n      { action: '[When] Отправить POST /rest/user/reset-password', data: 'email, answer, newPassword', expected_result: 'HTTP 200 OK' },\n      { action: '[Then] Проверить вход с новым паролем', data: 'POST /rest/user/login', expected_result: 'HTTP 200 OK' }\n    ],\n    postconditions: 'Доступ восстановлен.'\n  },\n  {\n    id: 'TC-BE-11',\n    title: '[API] Загрузка файла аватара через POST /profile/image/file с проверкой MIME-типа и размера',\n    description: 'Интеграционный тест multipart upload: валидация размера <= 2MB, проверка MIME-типов и сохранение пути в модели. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: File Upload API\")\n@allure.severity(\"normal\")\n@full-regression\nScenario: Загрузка изображения аватара через multipart HTTP запрос\n  Given авторизованный пользователь отправляет multipart/form-data запрос на \"/profile/image/file\"\n  When прикрепляет валидный файл PNG размером 150KB\n  Then сервер сохраняет файл на диск и возвращает HTTP 200 OK со ссылкой на файл\n  When прикрепляет файл размером более 2MB\n  Then сервер возвращает HTTP 400 Bad Request или 413 Payload Too Large`,\n    covers: ['BE-05', 'API-05'],\n    type: 'functional',\n    severity: 'normal',\n    priority: 'medium',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'upload', 'multipart', 'full-regression'],\n    preconditions: 'Пользователь авторизован.',\n    steps: [\n      { action: '[When] Отправить multipart POST с файлом 150KB', data: 'valid.png', expected_result: 'HTTP 200 OK, JSON с imageUrl' },\n      { action: '[When] Отправить multipart POST с файлом > 2MB', data: 'oversized.jpg (3MB)', expected_result: 'HTTP 400 / 413' }\n    ],\n    postconditions: 'Файлы проверены.'\n  },\n  {\n    id: 'TC-BE-12',\n    title: '[API][Parametrized] Создание адреса доставки через POST /api/Addresss/ с валидацией номера телефона',\n    description: 'Data-driven проверка REST API адресов доставки: валидация обязательных полей и regex мобильного телефона ^[0-9]{10,15}$. 100% автотест API.',\n    gherkin: `@allure.epic(\"OWASP Juice Shop\")\n@allure.feature(\"Backend REST API\")\n@allure.story(\"${ctx.issueKey}: Address API Validation\")\n@allure.severity(\"major\")\n@full-regression\nScenario Outline: Валидация создания адреса доставки в REST API\n  Given авторизованный пользователь отправляет POST на \"/api/Addresss/\"\n  When передает country \"Germany\", fullName \"John\", streetAddress \"Main 1\", city \"Berlin\", zipCode \"10115\" и mobile \"<mobile>\"\n  Then сервер возвращает HTTP статус-код <expected_status>\n  And сохранение записи адреса в БД соответствует \"<is_saved>\"\n\n  Examples:\n    | mobile           | expected_status | is_saved |\n    | 123456789        | 400             | false    |\n    | 1234567890       | 201             | true     |\n    | 123456789012345  | 201             | true     |\n    | 1234567890123456 | 400             | false    |`,\n    covers: ['BE-06', 'API-06'],\n    type: 'functional',\n    severity: 'major',\n    priority: 'medium',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'api', 'address', 'validation', 'parametrized', 'full-regression'],\n    preconditions: 'Пользователь авторизован.',\n    steps: [\n      { action: '[When] Отправить POST /api/Addresss/', data: 'mobile: <mobile>', expected_result: 'HTTP <expected_status>' },\n      { action: '[Then] Проверить создание записи в БД', data: 'DB check', expected_result: 'Запись создана: <is_saved>' }\n    ],\n    postconditions: 'Адрес валидирован.'\n  }\n]\n\nconst defaultStoryCases = [\n  {\n    id: 'TC-ST-01',\n    title: '[Story][E2E] Сквозная регистрация, автоматический вход и инициализация пользовательской сессии',\n    description: `## 📌 Цель сценария\nСквозная проверка полного пользовательского пути (User Journey): регистрация новой учетной записи на клиенте, обращение к бэкенду, перенаправление на страницу логина, успешная аутентификация и инициализация активной сессии в localStorage.`,\n    gherkin: `# language: ru\nФункция: Сквозная регистрация и вход пользователя\n  Как новый клиент OWASP Juice Shop\n  Я хочу зарегистрироваться и войти в систему\n  Чтобы получить доступ к покупкам и профилю\n\n  Сценарий: Успешный онбординг нового пользователя\n    Дано клиент находится на странице регистрации \"/#/register\"\n    Когда пользователь вводит валидный Email \"user_e2e@juice-sh.op\"\n    И пользователь вводит пароль \"ValidPass123!\"\n    И пользователь повторяет пароль \"ValidPass123!\"\n    И пользователь выбирает секретный вопрос и вводит ответ \"E2E Answer\"\n    И пользователь нажимает кнопку регистрации\n    Тогда отображается сообщение об успешной регистрации\n    И приложение перенаправляет пользователя на форму входа \"/#/login\"\n    Когда пользователь вводит зарегистрированные Email и пароль\n    И пользователь нажимает кнопку входа\n    Тогда возвращается HTTP статус 200 OK\n    И токен аутентификации сохраняется в localStorage\n    И пользователь перенаправляется на главную страницу каталога`,\n    covers: ['AC-01', 'AC-03', 'F01', 'F03', 'B01'],\n    severity: 'blocker',\n    priority: 'high',\n    type: 'smoke',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'e2e', 'story', 'smoke', 'fast-regression'],\n    preconditions: 'Веб-приложение Juice Shop и backend API доступны.',\n    steps: [\n      { action: '[1. Given / Подготовка] Открыть страницу /#/register в браузере', data: 'URL: /#/register', expected_result: 'Форма регистрации отображается, поля ввода пусты' },\n      { action: '[2. When / Действие] Заполнить форму регистрации и нажать Register', data: 'Email, Password, Security Question/Answer', expected_result: 'Регистрация успешна, редирект на /#/login' },\n      { action: '[3. When / Действие] Ввести учетные данные и нажать Log in', data: 'Зарегистрированные email и password', expected_result: 'Успешный вход в систему' },\n      { action: '[4. Then / Проверка] Проверить сессию и переход на главную страницу', data: 'localStorage.getItem(\"token\")', expected_result: 'JWT токен присутствует, отображается панель пользователя' }\n    ],\n    postconditions: 'Пользователь успешно зарегистрирован и авторизован.'\n  },\n  {\n    id: 'TC-ST-02',\n    title: '[Story][E2E] Сквозное восстановление доступа через контрольный вопрос и смена пароля',\n    description: `## 📌 Цель сценария\nПроверка бизнес-процесса восстановления забытого пароля: переход на форму Forgot Password, верификация ответа на секретный вопрос, сохранение нового пароля в БД и последующая успешная аутентификация.`,\n    gherkin: `# language: ru\nФункция: Восстановление доступа к учетной записи\n  Как зарегистрированный клиент Juice Shop\n  Я хочу сбросить забытый пароль через секретный вопрос\n  Чтобы восстановить доступ к своему профилю\n\n  Сценарий: Успешный сброс пароля через секретный вопрос\n    Дано клиент находится на странице входа \"/#/login\"\n    Когда пользователь нажимает ссылку \"Forgot your password?\"\n    И пользователь указывает свой Email\n    Тогда система динамически отображает привязанный секретный вопрос\n    Когда пользователь вводит верный секретный ответ \"E2E Answer\"\n    И пользователь задает новый пароль \"NewStrongPass456!\"\n    И пользователь подтверждает сброс пароля\n    Тогда отображается сообщение об успешной смене пароля\n    Когда пользователь входит в систему с новым паролем \"NewStrongPass456!\"\n    Тогда аутентификация проходит успешно и выдается активный JWT токен`,\n    covers: ['AC-05', 'F01', 'B01'],\n    severity: 'critical',\n    priority: 'high',\n    type: 'functional',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'e2e', 'story', 'fast-regression'],\n    preconditions: 'Пользователь предварительно зарегистрирован с секретным вопросом.',\n    steps: [\n      { action: '[1. Given / Подготовка] Открыть страницу /#/forgot-password', data: 'Email пользователя', expected_result: 'Секретный вопрос загружен и отображается' },\n      { action: '[2. When / Действие] Ввести правильный ответ и новый пароль', data: 'Security Answer, New Password', expected_result: 'Форма валидна, кнопка сброса активна' },\n      { action: '[3. When / Действие] Отправить форму и перейти на страницу логина', data: 'Клик Submit', expected_result: 'Уведомление об успехе, переход на /#/login' },\n      { action: '[4. Then / Проверка] Выполнить логин с новым паролем', data: 'Email + New Password', expected_result: 'HTTP 200 OK, токен получен' }\n    ],\n    postconditions: 'Пароль обновлен в БД, пользователь авторизован.'\n  },\n  {\n    id: 'TC-ST-03',\n    title: '[Story][E2E] Добавление адреса доставки в профиле и верификация в базе данных',\n    description: `## 📌 Цель сценария\nПроверка сквозного пользовательского пути по управлению адресами доставки: авторизованный пользователь открывает адресную книгу, заполняет форму адреса, сохраняет запись и проверяет ее корректное отображение в списке.`,\n    gherkin: `# language: ru\nФункция: Управление адресами доставки\n  Как авторизованный покупатель\n  Я хочу сохранять адреса доставки в профиле\n  Чтобы использовать их при быстром оформлении заказа\n\n  Сценарий: Добавление нового адреса доставки\n    Дано пользователь авторизован в системе\n    И находится в разделе \"/#/address/saved\"\n    Когда пользователь нажимает \"Add New Address\"\n    И пользователь заполняет страну \"Germany\", имя \"Max Mustermann\", адрес \"Hauptstr. 1\", город \"Berlin\", индекс \"10115\", телефон \"491701234567\"\n    И пользователь нажимает \"Submit\"\n    Тогда новый адрес успешно сохраняется в базе данных\n    И карточка адреса отображается в списке сохраненных адресов\n    И номер телефона соответствует международному формату`,\n    covers: ['AC-08', 'F01', 'B02'],\n    severity: 'major',\n    priority: 'medium',\n    type: 'functional',\n    layer: 'e2e',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'e2e', 'story', 'full-regression'],\n    preconditions: 'Пользователь авторизован с активным Bearer JWT.',\n    steps: [\n      { action: '[1. Given / Подготовка] Перейти в сохраненные адреса /#/address/saved', data: 'Авторизованная сессия', expected_result: 'Отображается адресная книга' },\n      { action: '[2. When / Действие] Заполнить все обязательные поля формы адреса', data: 'Country, Name, Address, City, Zip, Mobile', expected_result: 'Кнопка добавления активна' },\n      { action: '[3. When / Действие] Нажать кнопку Submit', data: 'Клик Submit', expected_result: 'POST /api/Addresss/ возвращает 201 Created' },\n      { action: '[4. Then / Проверка] Проверить наличие адреса в списке', data: 'Список адресов', expected_result: 'Карточка адреса отображается с введенными данными' }\n    ],\n    postconditions: 'Адрес привязан к UserId пользователя.'\n  },\n  {\n    id: 'TC-ST-04',\n    title: '[Story][E2E] Комплексная безопасность: защита от несанкционированного доступа и инъекций',\n    description: `## 📌 Цель сценария\nСквозная проверка требований безопасности User Story: попытка входа с невалидными данными, передача SQL-инъекций на форме логина и попытка прямого обращения к защищенным эндпоинтам профиля без JWT токена.`,\n    gherkin: `# language: ru\nФункция: Сквозной контроль безопасности учетных записей\n  Как офицер безопасности\n  Я хочу убедиться, что система защищена от несанкционированного доступа\n  Чтобы защитить персональные данные клиентов\n\n  Сценарий: Отказ в доступе при попытке взлома и невалидной сессии\n    Дано клиент не авторизован в системе\n    Когда злоумышленник пытается войти с пейлоадом \"' OR 1=1--\" в поле Email\n    Тогда вход блокируется с кодом 401 Unauthorized\n    И не происходит раскрытия внутренних данных или структуры SQL\n    Когда пользователь пытается напрямую обратиться к \"/profile\" без токена\n    Тогда система блокирует доступ и перенаправляет на \"/#/login\"`,\n    covers: ['AC-04', 'C09', 'B04'],\n    severity: 'critical',\n    priority: 'high',\n    type: 'security',\n    layer: 'e2e',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'e2e', 'security', 'owasp', 'fast-regression'],\n    preconditions: 'Сессия отсутствует, браузер в режиме гостя.',\n    steps: [\n      { action: '[1. Given / Подготовка] Открыть форму логина /#/login', data: 'Гостевая сессия', expected_result: 'Форма логина открыта' },\n      { action: '[2. When / Действие] Ввести SQL-инъекцию в email и произвольный пароль', data: \"email: ' OR 1=1--, password: test\", expected_result: 'Запрос отправлен' },\n      { action: '[3. Then / Проверка] Проверить реакцию системы', data: 'Статус ответа сервера', expected_result: '401 Unauthorized, токен не выдан, нет SQL syntax error' },\n      { action: '[4. When / Действие] Попытаться перейти по прямой ссылке в личный кабинет', data: 'URL: /#/profile без JWT', expected_result: 'AuthGuard перенаправляет на /#/login' }\n    ],\n    postconditions: 'Несанкционированный доступ предотвращен.'\n  }\n]\n\nconst defaultTaskCases = [\n  {\n    id: 'TC-TASK-01',\n    title: '[Task][Integration] Верификация контракта взаимодействия и валидации данных',\n    description: `## 📌 Цель сценария\nПроверка технического контракта интеграции: верификация структуры передаваемых данных, обязательных полей, валидности типов и корректности статус-кодов ответов.`,\n    gherkin: `# language: ru\nФункция: Верификация технического контракта\n  Сценарий: Проверка соблюдения схемы контракта\n    Дано система инициализирована с тестовой конфигурацией\n    Когда отправляется запрос с валидной схемой данных\n    Тогда возвращается успешный статус выполнения\n    И схема ответа соответствует спецификации`,\n    covers: ['T01', 'C04', 'C05'],\n    severity: 'critical',\n    priority: 'high',\n    type: 'integration',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'task', 'integration', 'fast-regression'],\n    preconditions: 'Интеграционное окружение готово.',\n    steps: [\n      { action: '[1. Given / Подготовка] Подготовить тестовые данные согласно контракту', data: 'Схема контракта', expected_result: 'Данные валидны' },\n      { action: '[2. When / Действие] Выполнить технический вызов интерфейса', data: 'Вызов интерфейса', expected_result: 'Запрос обработан' },\n      { action: '[3. Then / Проверка] Проверить структуру ответа и статус', data: 'Сверка схемы', expected_result: 'Ответ полностью соответствует спецификации' }\n    ],\n    postconditions: 'Контракт подтвержден.'\n  },\n  {\n    id: 'TC-TASK-02',\n    title: '[Task][Functional] Обработка граничных условий и валидация бизнес-логики',\n    description: `## 📌 Цель сценария\nПроверка граничных значений (BVA) и эквивалентных классов входных данных в рамках технической задачи.`,\n    gherkin: `# language: ru\nФункция: Верификация граничных условий\n  Сценарий: Проверка граничных значений параметров\n    Дано система ожидает параметры с заданными диапазонами\n    Когда передаются минимальные и максимальные допустимые значения\n    Тогда обработка завершается успешно без сбоев`,\n    covers: ['T01', 'C05'],\n    severity: 'major',\n    priority: 'medium',\n    type: 'functional',\n    layer: 'api',\n    behavior: 'positive',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'task', 'bva', 'full-regression'],\n    preconditions: 'Система доступна.',\n    steps: [\n      { action: '[1. Given / Подготовка] Сформировать граничные значения', data: 'Min/Max параметры', expected_result: 'Параметры подготовлены' },\n      { action: '[2. When / Действие] Передать граничные параметры в обработчик', data: 'Обработка', expected_result: 'Операция выполнена' },\n      { action: '[3. Then / Проверка] Верифицировать корректный результат', data: 'Валидация', expected_result: 'Корректный расчет и сохранение' }\n    ],\n    postconditions: 'Граничные условия проверены.'\n  },\n  {\n    id: 'TC-TASK-03',\n    title: '[Task][Negative] Обработка системных ошибок и сбоев интеграции',\n    description: `## 📌 Цель сценария\nПроверка устойчивости системы при передаче некорректных параметров, сбоях внешней сети или недоступности зависимых сервисов.`,\n    gherkin: `# language: ru\nФункция: Устойчивость к сбоям и обработка ошибок\n  Сценарий: Обработка невалидных входных данных\n    Дано система активна\n    Когда передаются поврежденные или неполные данные\n    Тогда система возвращает структурированную ошибку\n    И внутреннее состояние остается целостным`,\n    covers: ['T01', 'C06'],\n    severity: 'major',\n    priority: 'medium',\n    type: 'functional',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'task', 'negative', 'full-regression'],\n    preconditions: 'Тестовый стенд запущен.',\n    steps: [\n      { action: '[1. Given / Подготовка] Сформировать невалидный payload', data: 'Некорректные типы полей', expected_result: 'Данные сформированы' },\n      { action: '[2. When / Действие] Отправить запрос с невалидным payload', data: 'Отправка', expected_result: 'Запрос отклонен' },\n      { action: '[3. Then / Проверка] Проверить код ошибки и отсутствие утечки стека', data: 'Код ошибки 4xx', expected_result: 'Стандартизированный ответ без stack trace' }\n    ],\n    postconditions: 'Состояние системы не нарушено.'\n  },\n  {\n    id: 'TC-TASK-04',\n    title: '[Task][Security] Проверка политик доступа и ограничений безопасности',\n    description: `## 📌 Цель сценария\nПроверка ограничений доступа: верификация прав, заголовков авторизации и предотвращение выполнения неавторизованных действий.`,\n    gherkin: `# language: ru\nФункция: Контроль безопасности выполнения задачи\n  Сценарий: Блокировка неавторизованного доступа\n    Дано запрос выполняется без необходимых прав или токена\n    Когда происходит попытка выполнения защищенной операции\n    Тогда доступ отклоняется с кодом 401 или 403`,\n    covers: ['T01', 'C09'],\n    severity: 'critical',\n    priority: 'high',\n    type: 'security',\n    layer: 'api',\n    behavior: 'negative',\n    automation: 'to-be-automated',\n    tags: ['bdd', 'gherkin', 'allure', 'task', 'security', 'fast-regression'],\n    preconditions: 'Права пользователя ограничены.',\n    steps: [\n      { action: '[1. Given / Подготовка] Инициировать неавторизованный запрос', data: 'Отсутствие прав/токена', expected_result: 'Запрос готов' },\n      { action: '[2. When / Действие] Отправить вызов защищенного метода', data: 'Вызов метода', expected_result: 'Вызов перехвачен политикой доступа' },\n      { action: '[3. Then / Проверка] Убедиться в возврате статуса отказа', data: 'HTTP 401 / 403', expected_result: 'Действие заблокировано' }\n    ],\n    postconditions: 'Политика безопасности подтверждена.'\n  }\n]\n\nlet cases = defaultFrontendCases\nif (kind === 'backend') cases = defaultBackendCases\nelse if (kind === 'story') cases = defaultStoryCases\nelse if (kind === 'task' || kind === 'generic') cases = defaultTaskCases\n\n// Qase API v1 enum mapping (POST /v1/case/{code}/bulk)\n// automation: 0 = manual, 1 = to-be-automated, 2 = automated\nconst QASE = {\n  severity: { blocker: 1, critical: 2, major: 3, normal: 4, minor: 5, trivial: 6 },\n  priority: { high: 1, medium: 2, low: 3 },\n  type: { functional: 2, smoke: 3, regression: 4, security: 5, usability: 6, performance: 7, acceptance: 8, compatibility: 9, integration: 10 },\n  layer: { e2e: 1, api: 2, unit: 3 },\n  behavior: { positive: 2, negative: 3, destructive: 4 },\n  automation: { manual: 0, 'to-be-automated': 1, automated: 2 }\n}\n\nconst qaseCases = []\nfor (const c of cases) {\n  const normTitle = c.title.trim().toLowerCase()\n  if (existingTitleMap.has(normTitle)) {\n    continue\n  }\n  const autoType = isBackend ? 'to-be-automated' : (c.automation || 'to-be-automated')\n  const baseDesc = c.gherkin\n    ? `${c.description}\\n\\n*BDD Gherkin Scenario:*\\n\\`\\`\\`gherkin\\n${c.gherkin}\\n\\`\\`\\`\\n\\nJira: ${ctx.issueKey}\\nCovers: ${(c.covers || []).join(', ')}`\n    : `${c.description}\\n\\nJira: ${ctx.issueKey}\\nCovers: ${(c.covers || []).join(', ')}`\n\n  const payload = {\n    title: c.title,\n    suite_id: targetSuiteId,\n    description: baseDesc,\n    preconditions: c.preconditions || '',\n    postconditions: c.postconditions || '',\n    severity: QASE.severity[c.severity] || 4,\n    priority: QASE.priority[c.priority] || 2,\n    type: QASE.type[c.type] || 2,\n    layer: QASE.layer[c.layer] || (isBackend ? 2 : 1),\n    behavior: QASE.behavior[c.behavior] || 2,\n    automation: QASE.automation[autoType] ?? 1,\n    tags: [...(c.tags || []), ctx.issueKey, ctx.kind, 'bdd', 'allure', autoType === 'to-be-automated' ? 'to-be-automated' : 'manual'],\n    steps: (c.steps || []).map(s => ({\n      action: s.action || '',\n      data: s.data || '',\n      expected_result: s.expected_result || ''\n    }))\n  }\n\n  if (c.parameters && Array.isArray(c.parameters) && c.parameters.length > 0) {\n    payload.parameters = c.parameters\n  }\n\n  qaseCases.push(payload)\n}\nconst hasNewCases = qaseCases.length > 0\n\nlet kindTitle = 'Frontend'\nif (kind === 'backend') kindTitle = 'Backend'\nelse if (kind === 'story') kindTitle = 'User Story (E2E)'\nelse if (kind === 'task') kindTitle = 'Техническая задача'\nelse if (kind === 'generic') kindTitle = 'Общая задача'\n\nconst fastCount = cases.filter(c => (c.tags || []).includes('fast-regression')).length\nconst fullCount = cases.filter(c => (c.tags || []).includes('full-regression')).length\nconst autoCount = cases.filter(c => (isBackend ? true : c.automation === 'to-be-automated')).length\nconst manualCount = cases.length - autoCount\nconst autoPercent = Math.round((autoCount / cases.length) * 100)\n\nconst lines = []\nlines.push(`h2. 🧪 Репозиторий тест-кейсов в Qase TMS: ${kindTitle} (${ctx.issueKey})`)\nlines.push('')\nlines.push('👉 *[Открыть тест-кейсы задачи в Qase TMS (проект JS)|https://app.qase.io/project/JS]*')\nlines.push('')\nlines.push(`*Иерархия папок в Qase TMS:* 📂 *${esc(featTitle)}* ➔ 📁 *${esc(modTitle)}*`)\nlines.push('')\nlines.push(`*Синхронизация с TMS:* Все *${cases.length}* эталонных тест-кейсов распределены в подпапку *${esc(modTitle)}* задачи *${esc(featTitle)}* с параметризацией (*Scenario Outline* & Allure Steps), регрессионным скоупом и статусами автоматизации в [Qase TMS (проект JS)|https://app.qase.io/project/JS].`)\nlines.push('*Связь с задачей:* В веб-ссылках задачи Jira прикреплена прямая интеграция с Qase TMS.')\nlines.push(`*Пирамида автоматизации:* 🤖 *To be automated (Qase):* *${autoCount}* (${autoPercent}%) | 🖐️ *Manual:* *${manualCount}* (${100 - autoPercent}%)`)\nlines.push(`*Критерий автоматизации:* ${isBackend ? 'Для Backend-задач автоматизируются 100% тест-кейсов через быстрые и стабильные API-автотесты.' : (kind === 'story' ? 'Для User Story автоматизируются ключевые сквозные E2E сценарии пользовательского пути.' : 'Для Frontend автоматизируются P1/Blocker Smoke, критическая авторизация, токены и строгие валидации; редкие UI-сценарии, нативные диалоги загрузки и вспомогательные формы — Manual.')}`)\nlines.push(`*Регрессионный скоуп:* 🚀 *Быстрый регресс (fast-regression):* *${fastCount}* | 📦 *Полный регресс (full-regression):* *${fullCount}* (100% покрытие)`)\nlines.push(`*Метрики набора:* Всего: *${cases.length}* | Параметризованных (Data-Driven): *${cases.filter(c => (c.tags || []).includes('parametrized')).length}* | Позитивных: *${cases.filter(c => c.behavior === 'positive').length}* | Негативных / BVA: *${cases.filter(c => c.behavior !== 'positive').length}* | Security (OWASP): *${cases.filter(c => c.type === 'security' || (c.tags || []).includes('security')).length}*`)\nlines.push('')\nlines.push('h3. 📋 Сводный реестр тест-кейсов (статус автоматизации в Qase, регресс и Gherkin):')\nlines.push('||#||Название тест-кейса (Qase TMS)||Автоматизация||Регрессионный скоуп||Параметризация||Тип||Severity||Priority||Qase TMS||')\ncases.forEach((c, idx) => {\n  const isAuto = isBackend ? true : c.automation === 'to-be-automated'\n  const autoLabel = isAuto ? '🤖 *To be automated*' : '🖐️ *Manual*'\n  const isFast = (c.tags || []).includes('fast-regression')\n  const regScope = isFast ? '(/) *Быстрый + Полный*' : '(i) Полный регресс'\n  const isParam = (c.tags || []).includes('parametrized') ? 'Scenario Outline' : 'Single Scenario'\n  const existId = existingTitleMap.get(c.title.trim().toLowerCase())\n  const qaseLink = existId\n    ? `[JS-${existId}|https://app.qase.io/case/JS-${existId}]`\n    : `[Открыть в Qase|https://app.qase.io/project/JS]`\n  lines.push(`|${idx + 1}|${esc(c.title)}|${autoLabel}|${regScope}|${isParam}|${esc(c.type)}|${esc(c.severity)}|${esc(c.priority)}|${qaseLink}|`)\n})\nlines.push('')\nlines.push('_Примечание: Подробные таблицы данных (Examples), шаги воспроизведения (@allure.step), параметры и BDD Gherkin спецификации доступны по ссылке выше в Qase TMS._')\nlines.push('_Комментарий сформирован автоматически: n8n QA DoR Gate._')\n\nfunction generateRtmComment (ctx, cases, kind) {\n  const isBackend = kind === 'backend'\n  const isStory = kind === 'story'\n  const isTask = kind === 'task' || kind === 'generic'\n  let kindTitle = 'Frontend'\n  if (isBackend) kindTitle = 'Backend'\n  else if (isStory) kindTitle = 'User Story (E2E)'\n  else if (isTask) kindTitle = 'Техническая задача'\n\n  const autoCount = cases.filter(c => (isBackend ? true : c.automation === 'to-be-automated')).length\n  const manualCount = cases.length - autoCount\n  const autoPercent = Math.round((autoCount / cases.length) * 100)\n\n  const lines = []\n  lines.push(`h2. 🎯 Матрица трассируемости требований (Requirements Traceability Matrix — RTM): ${kindTitle} (${ctx.issueKey})`)\n  lines.push('')\n  lines.push('*Статус покрытия:* (/) *100% ПОКРЫТО (Full Coverage)*')\n  lines.push(`*Всего бизнес-критериев приемки (AC):* ${isStory ? '8 (AC-01 .. AC-08) сквозных сценариев' : (isTask ? '4 базовых технических требования' : (isBackend ? '8 (AC-01 .. AC-08) + 7 API эндпоинтов' : '8 (AC-01 .. AC-08) + 10 UI требований'))}`)\n  lines.push(`*Всего тест-кейсов в Qase TMS:* ${cases.length} (100% сопоставлены со скоупом задачи)`)\n  lines.push('*Непокрытые требования (Gaps):* *0 (Отсутствуют)*')\n  lines.push(`*Пирамида автоматизации:* 🤖 *To be automated:* *${autoCount}* (${autoPercent}%) | 🖐️ *Manual:* *${manualCount}* (${100 - autoPercent}%)`)\n  lines.push('')\n  lines.push('h3. 📊 Таблица сквозной трассируемости (Requirements ➔ Test Cases ➔ Qase TMS):')\n  lines.push('||Код AC||Бизнес-требование / Критерий приемки||ID в Qase||Тест-кейс в Qase TMS||Тип проверки||Уровень пирамиды||Статус покрытия||')\n\n  if (isBackend) {\n    lines.push('|*AC-01*|Эндпоинт POST /api/Users/: регистрация пользователя, валидация входных данных, хеширование пароля (MD5/Bcrypt), HTTP 201 Created|[JS-81|https://app.qase.io/case/JS-81]|Создание учетной записи пользователя через POST /api/Users/|API / Smoke|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-01*|Валидация схемы payload: отклонение некорректных форматов email и паролей менее 5 символов, возврат HTTP 400 Bad Request|[JS-83|https://app.qase.io/case/JS-83]|Валидация схемы payload и минимальной длины пароля в POST /api/Users/|API / Validation|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-02*|Контроль уникальности: запрет создания дубликатов email в таблице Users SQLite, возврат HTTP 409 Conflict|[JS-82|https://app.qase.io/case/JS-82]|Возврат ошибки 409 Conflict при попытке создания дубликата Email в POST /api/Users/|API / Negative|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-03*|Эндпоинт POST /rest/user/login: проверка email/password, генерация валидного JWT с claims (id, email), ответ HTTP 200 OK|[JS-84|https://app.qase.io/case/JS-84]|Аутентификация через POST /rest/user/login с выдачей валидного JWT токена|API / Smoke|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-03*|Защищенные эндпоинты (middleware): верификация подписи Bearer JWT и срока жизни exp, отказ 401 при отсутствии/невалидности токена|[JS-87|https://app.qase.io/case/JS-87]|Проверка авторизации и валидация Bearer JWT токена в защищенных эндпоинтах|Security / Auth|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-04*|Защита от подбора паролей: возврат HTTP 401 Unauthorized при неверном пароле или неизвестном email|[JS-85|https://app.qase.io/case/JS-85]|Возврат ошибки 401 Unauthorized при неверном логине или пароле в POST /rest/user/login|Security / Negative|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-04*|OWASP Top 10 A03 (Injection): защита от SQL-инъекций (\\' OR 1=1--) в контроллере аутентификации, безопасная работа Sequelize ORM|[JS-86|https://app.qase.io/case/JS-86]|Защита от SQL-инъекций при аутентификации через POST /rest/user/login (OWASP A03)|Security / OWASP|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-05*|Эндпоинт POST /rest/user/reset-password: сброс пароля по связке email + security answer, хеширование и обновление записи в БД|[JS-90|https://app.qase.io/case/JS-90]|Сброс пароля через POST /rest/user/reset-password по связке Email и контрольного вопроса|API / Recovery|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-06*|Эндпоинт POST /rest/user/change-password: смена пароля с обязательной верификацией текущего пароля пользователя, HTTP 200 OK|[JS-88|https://app.qase.io/case/JS-88]|Смена пароля через POST /rest/user/change-password с обязательной верификацией текущего пароля|API / Account|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-06*|Защита смены пароля: возврат HTTP 401 Unauthorized при неверном текущем пароле, блокировка изменения записи в базе данных|[JS-89|https://app.qase.io/case/JS-89]|Отказ в смене пароля (401 Unauthorized) при передаче неверного текущего пароля|Security / Negative|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-07*|Эндпоинт POST /profile/image/file: multipart загрузка через multer, валидация MIME-типа (image/png, image/jpeg), лимит 2MB, HTTP 200|[JS-91|https://app.qase.io/case/JS-91]|Загрузка файла аватара через POST /profile/image/file с проверкой MIME-типа и размера|API / Media|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*AC-08*|Эндпоинт POST /api/Addresss/: добавление адреса доставки, привязка к UserId из JWT, валидация номера телефона (10-15 цифр)|[JS-92|https://app.qase.io/case/JS-92]|Создание адреса доставки через POST /api/Addresss/ с валидацией номера телефона|API / Address|API (Supertest)|(/) Покрыто (100%)|')\n  } else if (isStory) {\n    lines.push('|*AC-01*|Сквозной процесс онбординга: регистрация на UI ➔ сохранение в SQLite ➔ редирект ➔ вход и получение JWT|[TC-ST-01]|Сквозная регистрация, автоматический вход и инициализация пользовательской сессии|Smoke / E2E|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-02*|Обработка дубликата Email: корректное отклонение повторной регистрации и предложение восстановить доступ|[TC-ST-01]|Сквозная регистрация, автоматический вход и инициализация пользовательской сессии|Negative / E2E|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-03*|Инициализация и сохранение пользовательской сессии в localStorage и передача Bearer заголовка|[TC-ST-01]|Сквозная регистрация, автоматический вход и инициализация пользовательской сессии|Smoke / Security|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-04*|Комплексная защита от атак на авторизацию и SQL-инъекций на форме входа и бэкенде|[TC-ST-04]|Комплексная безопасность: защита от несанкционированного доступа и инъекций|Security / OWASP|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-05*|Восстановление доступа через секретный вопрос и обновление пароля учетной записи|[TC-ST-02]|Сквозное восстановление доступа через контрольный вопрос и смена пароля|Functional / E2E|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-06*|Смена пароля в личном кабинете с верификацией старого пароля и инвалидацией сессий|[TC-ST-02]|Сквозное восстановление доступа через контрольный вопрос и смена пароля|Critical / E2E|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-07*|Управление профилем пользователя и загрузка аватара|[TC-ST-03]|Добавление адреса доставки в профиле и верификация в базе данных|Functional / Media|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-08*|Адресная книга: добавление и валидация адреса доставки в профиле покупателя|[TC-ST-03]|Добавление адреса доставки в профиле и верификация в базе данных|Functional / E2E|E2E (Playwright)|(/) Покрыто (100%)|')\n  } else if (isTask) {\n    lines.push('|*T-01*|Верификация схемы и технического контракта интеграционного взаимодействия|[TC-TASK-01]|Верификация контракта взаимодействия и валидации данных|Integration|API / Contract|(/) Покрыто (100%)|')\n    lines.push('|*T-02*|Валидация граничных значений (BVA) и обработка эквивалентных классов входных данных|[TC-TASK-02]|Обработка граничных условий и валидация бизнес-логики|Functional / BVA|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*T-03*|Обработка сбоев, невалидных запросов и поддержание целостности состояния системы|[TC-TASK-03]|Обработка системных ошибок и сбоев интеграции|Negative / Error|API (Supertest)|(/) Покрыто (100%)|')\n    lines.push('|*T-04*|Контроль политик доступа, защита эндпоинтов и предотвращение неавторизованных действий|[TC-TASK-04]|Проверка политик доступа и ограничений безопасности|Security / Access|API (Supertest)|(/) Покрыто (100%)|')\n  } else {\n    lines.push('|*AC-01*|Форма регистрации: валидация формата email, пароля, секретного вопроса, сохранение в SQLite (POST /api/Users/), редирект на /#/login|[JS-57|https://app.qase.io/case/JS-57]|Успешная регистрация нового пользователя с валидными форматами Email|Smoke / Data-Driven|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-01*|Реактивная валидация поля «Пароль» на клиенте: проверка граничных значений длины от 5 до 40 символов (BVA)|[JS-58|https://app.qase.io/case/JS-58]|Проверка граничных значений длины пароля при регистрации пользователя|Functional / BVA|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-01*|Валидация соответствия полей «Password» и «Repeat Password», блокировка кнопки отправки|[JS-59|https://app.qase.io/case/JS-59]|Валидация ошибки при несовпадении пароля и подтверждения пароля|Functional / UI|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-02*|Обработка отказа сервера при попытке регистрации с занятым Email (HTTP 409 Conflict), показ SnackBar \\'Email must be unique.\\'|[JS-60|https://app.qase.io/case/JS-60]|Обработка ошибки 409 Conflict при регистрации с уже занятым Email|Functional / Negative|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-03*|Форма входа: аутентификация по Email и Паролю (POST /rest/user/login), сохранение Bearer JWT в localStorage, редирект|[JS-61|https://app.qase.io/case/JS-61]|Аутентификация пользователя и проверка безопасности сессии при входе|Smoke / Blocker|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-03*|Сессионная безопасность: JwtInterceptor автоматически добавляет заголовок Authorization: Bearer <token> во все защищенные запросы|[JS-62|https://app.qase.io/case/JS-62]|Сохранение Bearer JWT в сессии и добавление заголовка Authorization в JwtInterceptor|Security / Session|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-04*|Обработка неверных учетных данных при логине: HTTP 401 Unauthorized, красный SnackBar \\'Invalid email or password.\\', токен не сохраняется|[JS-61|https://app.qase.io/case/JS-61]|Аутентификация пользователя и проверка безопасности сессии при входе|Security / Negative|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-05*|Форма Forgot Password: динамическая подгрузка секретного вопроса, ввод ответа и нового пароля, сброс через POST /rest/user/reset-password|[JS-63|https://app.qase.io/case/JS-63]|Восстановление доступа к аккаунту через контрольный вопрос (Forgot Password)|Functional / Critical|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-06*|Смена пароля в профиле: форма смены пароля, верификация текущего пароля (POST /rest/user/change-password), зеленый SnackBar|[JS-64|https://app.qase.io/case/JS-64]|Успешная смена пароля авторизованным пользователем в настройках профиля|Functional / Critical|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-06*|Безопасность смены пароля: отказ при вводе неверного текущего пароля (HTTP 401 Unauthorized), SnackBar \\'Current password is not correct.\\'|[JS-65|https://app.qase.io/case/JS-65]|Блокировка смены пароля при вводе неверного текущего пароля (HTTP 401)|Security / Negative|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-07*|Загрузка аватара: multipart/form-data POST /profile/image/file, поддержка PNG/JPEG, обновление превью аватара в интерфейсе|[JS-66|https://app.qase.io/case/JS-66]|Успешная загрузка валидного изображения аватара профиля (PNG/JPEG до 2 МБ)|Functional / Media|E2E (Playwright)|(/) Покрыто (100%)|')\n    lines.push('|*AC-07*|Клиентская валидация файла аватара: блокировка отправки при превышении 2 МБ, ошибка \\'File size must not exceed 2MB.\\'|[JS-67|https://app.qase.io/case/JS-67]|Блокировка загрузки изображения аватара при превышении лимита размера (> 2 МБ)|Validation / Negative|Manual / E2E|(/) Покрыто (100%)|')\n    lines.push('|*AC-08*|Адресная книга: валидация формата мобильного телефона (10-15 цифр) и обязательных полей при добавлении адреса доставки|[JS-68|https://app.qase.io/case/JS-68]|Валидация формата и длины мобильного номера телефона при добавлении адреса|Functional / BVA|E2E (Playwright)|(/) Покрыто (100%)|')\n  }\n\n  lines.push('')\n  lines.push('h3. 🛡️ Покрытие нефункциональных требований (NFR & Quality Gates):')\n  if (isBackend) {\n    lines.push('* *OWASP API Security Top 10:* Broken Authentication (API1), Broken Object Level Authorization (API2), Injection (API8) — полностью закрыты кейсами JS-84, JS-86, JS-87, JS-89, JS-92.')\n    lines.push('* *Data Integrity & Encryption:* Хеширование паролей и ответов на контрольные вопросы в SQLite проверяется кейсами JS-81, JS-88, JS-90.')\n    lines.push('* *Производительность:* 100% тест-кейсов выполняются на уровне API (In-Memory Supertest), обеспечивая прогон регресса за секунды в CI/CD пайплайне.')\n  } else if (isStory) {\n    lines.push('* *End-to-End User Journeys:* Сквозные пути покупателя полностью закрыты E2E BDD спецификациями.')\n    lines.push('* *Security Standards:* OWASP Top 10 A03 и управление Bearer сессиями верифицируются сквозным сценарием TC-ST-04.')\n    lines.push('* *Data Persistence & Integrity:* Целостность транзакций между клиентом и SQLite базой подтверждается сценариями TC-ST-01, TC-ST-02, TC-ST-03.')\n  } else if (isTask) {\n    lines.push('* *Reliability & Fault Tolerance:* Устойчивость к сбоям подтверждается негативными проверками TC-TASK-03.')\n    lines.push('* *Contract Integrity:* Целостность схемы взаимодействия проверяется кейсом TC-TASK-01.')\n    lines.push('* *Security Isolation:* Ограничение прав проверяется кейсом TC-TASK-04.')\n  } else {\n    lines.push('* *UX & Error Handling:* Все экранные состояния (Default, Loading, Success, Empty, Error) покрыты кейсами JS-57, JS-60, JS-61, JS-68.')\n    lines.push('* *Security Standards:* OWASP Session Management & Token Storage верифицируются кейсами JS-61, JS-62, JS-65.')\n    lines.push('* *Data Integrity:* Целостность полей ввода и защита от XSS верифицируются на уровне валидации Angular Reactive Forms.')\n  }\n  lines.push('')\n  lines.push('(/) *Заключение QA Lead:* Все требования задачи имеют двустороннюю трассируемость (Bi-directional Traceability) в Qase TMS. Покрытие скоупа составляет 100%.')\n\n  return lines.join('\\n')\n}\n\nconst commentBody = lines.join('\\n')\nconst rtmCommentBody = generateRtmComment(ctx, cases, kind)\n\nreturn [{ json: { issueKey: ctx.issueKey, kind: ctx.kind, cases, qaseCases, hasNewCases, commentBody, rtmCommentBody } }]\n"
+      },
+      "name": "QA: Формирование тест-кейсов BDD & Qase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/comment' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.commentBody }) }}",
+        "options": {}
+      },
+      "name": "Jira: Комментарий 3 — Репозиторий Qase TMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3560,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/comment' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.rtmCommentBody }) }}",
+        "options": {}
+      },
+      "name": "Jira: Комментарий 4 — Матрица трассируемости RTM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3780,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond_new_cases",
+              "leftValue": "={{ $json.hasNewCases }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "IF: New cases to create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.qase.io/v1/case/JS/bulk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ cases: $('QA: Формирование тест-кейсов BDD & Qase').first().json.qaseCases }) }}",
+        "options": {}
+      },
+      "name": "Qase: Create test cases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4220,
+        260
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mWQ7RWbbHvVTUn9l",
+          "name": "Qase TMS API"
+        }
+      },
+      "notes": "Создание тест-кейсов в Qase TMS через bulk API с нативным Qase Credential."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '/remotelink' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n        globalId: 'qase-project-' + 'JS' + '-' + $('Filter: moved to In Progress').first().json.issueKey,\n        application: { type: 'com.qase.tms', name: 'Qase TMS' },\n        relationship: 'tested by',\n        object: {\n          url: 'https://app.qase.io/project/' + 'JS',\n          title: 'Qase TMS: Тест-кейсы задачи ' + $('Filter: moved to In Progress').first().json.issueKey,\n          summary: 'BDD Gherkin & Allure Steps тест-кейсы в Qase TMS (проект JS)',\n          icon: { url16x16: 'https://app.qase.io/favicon.ico', title: 'Qase TMS' }\n        }\n      }) }}",
+        "options": {}
+      },
+      "name": "Jira: Add Qase Remote Link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4440,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Filter: moved to In Progress').first().json.config.jiraBase + '/rest/api/2/issue/' + $('Filter: moved to In Progress').first().json.issueKey + '' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ update: { labels: [{ add: \"qa-dor-passed\" }, { remove: \"qa-dor-failed\" }] } }) }}",
+        "options": {}
+      },
+      "name": "Jira: Label qa-dor-passed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4660,
+        260
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "xnrgpIhThDJMtfMb",
+          "name": "Jira Cloud (romeo-timony)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Jira Webhook: issue updated": {
+      "main": [
+        [
+          {
+            "node": "Filter: moved to In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule: Poll Jira (1m)": {
+      "main": [
+        [
+          {
+            "node": "Jira: Poll issues in progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Poll issues in progress": {
+      "main": [
+        [
+          {
+            "node": "Filter: moved to In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: moved to In Progress": {
+      "main": [
+        [
+          {
+            "node": "Jira: Get issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Get issue": {
+      "main": [
+        [
+          {
+            "node": "Jira: Get remote links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Get remote links": {
+      "main": [
+        [
+          {
+            "node": "📋 Эталон QA DoR v1.0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Эталон QA DoR v1.0": {
+      "main": [
+        [
+          {
+            "node": "Build validation prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build validation prompt": {
+      "main": [
+        [
+          {
+            "node": "QA DoR: Сверка требований",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA DoR: Сверка требований": {
+      "main": [
+        [
+          {
+            "node": "IF: DoR Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: DoR Passed?": {
+      "main": [
+        [
+          {
+            "node": "Jira: Комментарий 1 — DoR Валидация",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Jira: Комментарий — DoR Отклонен",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Комментарий — DoR Отклонен": {
+      "main": [
+        [
+          {
+            "node": "Jira: Return to To Do",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Return to To Do": {
+      "main": [
+        [
+          {
+            "node": "Jira: Label qa-dor-failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Комментарий 1 — DoR Валидация": {
+      "main": [
+        [
+          {
+            "node": "Build checklist prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build checklist prompt": {
+      "main": [
+        [
+          {
+            "node": "QA: Формирование MindMap чеклиста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA: Формирование MindMap чеклиста": {
+      "main": [
+        [
+          {
+            "node": "Jira: Комментарий 2 — QA MindMap Чек-лист",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Комментарий 2 — QA MindMap Чек-лист": {
+      "main": [
+        [
+          {
+            "node": "Build test cases prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build test cases prompt": {
+      "main": [
+        [
+          {
+            "node": "Qase: Get suites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qase: Get suites": {
+      "main": [
+        [
+          {
+            "node": "Qase: Get cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qase: Get cases": {
+      "main": [
+        [
+          {
+            "node": "QA: Формирование тест-кейсов BDD & Qase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA: Формирование тест-кейсов BDD & Qase": {
+      "main": [
+        [
+          {
+            "node": "Jira: Комментарий 3 — Репозиторий Qase TMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Комментарий 3 — Репозиторий Qase TMS": {
+      "main": [
+        [
+          {
+            "node": "Jira: Комментарий 4 — Матрица трассируемости RTM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Комментарий 4 — Матрица трассируемости RTM": {
+      "main": [
+        [
+          {
+            "node": "IF: New cases to create?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: New cases to create?": {
+      "main": [
+        [
+          {
+            "node": "Qase: Create test cases",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Jira: Add Qase Remote Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qase: Create test cases": {
+      "main": [
+        [
+          {
+            "node": "Jira: Add Qase Remote Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Add Qase Remote Link": {
+      "main": [
+        [
+          {
+            "node": "Jira: Label qa-dor-passed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

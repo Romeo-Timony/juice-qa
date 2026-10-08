@@ -1,0 +1,49 @@
+stages:
+  - test
+  - report
+
+variables:
+  # Настройки среды
+  JUICE_SHOP_URL: "http://juice-shop:3000"
+  PYTEST_ADDOPTS: "--alluredir=allure-results"
+
+# Поднимаем сам Juice Shop как сервис для тестирования
+services:
+  - name: bkimminich/juice-shop:latest
+    alias: juice-shop
+
+# Шаблон для запуска тестов
+.python_tests:
+  image: mcr.microsoft.com/playwright/python:v1.40.0-jammy
+  stage: test
+  before_script:
+    - pip install -r requirements.txt
+    - playwright install --with-deps chromium
+  artifacts:
+    paths:
+      - allure-results/
+    expire_in: 1 day
+    when: always
+
+backend_api_tests:
+  extends: .python_tests
+  script:
+    - pytest tests/backend/ -m api
+
+frontend_ui_tests:
+  extends: .python_tests
+  script:
+    - pytest tests/frontend/ -m ui
+
+allure_report:
+  stage: report
+  image: frankescobar/allure-docker-service
+  script:
+    - allure generate allure-results -o allure-report --clean
+  artifacts:
+    paths:
+      - allure-report/
+    expire_in: 30 days
+  dependencies:
+    - backend_api_tests
+    - frontend_ui_tests
