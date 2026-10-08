@@ -131,6 +131,24 @@ def daemon_loop():
                     if not api_file.exists() or not ui_file.exists():
                         logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
                         try:
+                            # Извлечение N8N_EXECUTION_ID из комментария
+                            exec_id = None
+                            for c in comments:
+                                body = str(c.get("body", {}))
+                                if "[N8N_EXECUTION_ID:" in body:
+                                    import re
+                                    match = re.search(r"\[N8N_EXECUTION_ID:\s*([^\]]+)\]", body)
+                                    if match:
+                                        exec_id = match.group(1).strip()
+                                        break
+                            if exec_id:
+                                import json
+                                with open(BASE_DIR / "n8n_execution.json", "w") as f:
+                                    json.dump({"executionId": exec_id}, f)
+                                logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
+                            else:
+                                logger.warning("N8N_EXECUTION_ID не найден в комментариях Jira!")
+                                
                             from scaffold_dynamic import generate_tests
                             generate_tests(issue_key)
                             update_sqlite(issue_key)

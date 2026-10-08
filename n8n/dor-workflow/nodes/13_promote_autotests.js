@@ -37,7 +37,9 @@ const finalReport = [
   'allure serve allure-results',
   '{noformat}',
   '',
-  '*(/) Задача полностью протестирована и готова к релизу.*'
+  '*(/) Задача полностью протестирована и готова к релизу.*',
+  '',
+  `[N8N_EXECUTION_ID: ${$execution.id}]`
 ].join('\n')
 
 return [{
