@@ -135,6 +135,43 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     ),
 
     // =========================================================================
+    // ⚙️ НОВЫЕ СТИКЕРЫ (ДЛЯ ЭТАПОВ 6, 7 И GITHUB ACTIONS)
+    // =========================================================================
+
+    stickyNote(
+      'Стикер: Контроль 2 (Gate 2)',
+      `## 🛡️ 8. Контроль 2: Генерация и проверка кода [Этап 6]
+**Что здесь происходит:**
+Автоматическая кодогенерация на Python/Playwright.
+* Скрипт генерирует код автотестов.
+* ИИ проверяет качество кода (Quality Gate 2).
+* В случае успеха пропускает дальше, при ошибке — отклоняет.`,
+      [5480, 40], 1080, 420, 3 // Синий
+    ),
+
+    stickyNote(
+      'Стикер: Внедрение автотестов',
+      `## 🚀 9. Внедрение автотестов [Этап 7]
+**Что здесь происходит:**
+Завершение работы пайплайна генерации.
+* Утвержденный код переносится в рабочую папку проекта.
+* Публикует финальный отчет о внедрении **[Этап 7 из 7]**.
+* Сохраняет файлы на диск (для push'а в Git).`,
+      [6600, 40], 600, 420, 5 // Розовый/Красный
+    ),
+
+    stickyNote(
+      'Стикер: GitHub Actions Результаты',
+      `## 🐙 10. Результаты прогона в GitHub Actions [Этап 8]
+**Что здесь происходит:**
+Прием отчета о результатах выполнения автотестов в CI/CD (GitHub).
+* Слушает вебхук от пайплайна GitHub Actions.
+* Извлекает статус и ссылку на Allure-отчет.
+* Публикует итоговый вердикт с результатами тестов напрямую в Jira.`,
+      [7240, 40], 700, 420, 6 // Желтый/Оранжевый
+    ),
+
+    // =========================================================================
     // ⚙️ ОСНОВНАЯ ЕДИНАЯ ЛИНИЯ НОД (БЕЗ ОТРЫВОВ И ЗАВИСШИХ ЭЛЕМЕНТОВ)
     // =========================================================================
 
@@ -361,7 +398,55 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       "={{ JSON.stringify({ body: $('Перенос автотестов в рабочий проект').first().json.finalReportCommentBody }) }}"),
     
     // Нода для записи сгенерированных файлов на диск (использует fs)
-    codeNode('Сохранение файлов на диск', '14_write_files.js', [7080, 260])
+    codeNode('Сохранение файлов на диск', '14_write_files.js', [7080, 260]),
+
+    // =========================================================================
+    // 8. ПРИЕМ ОТЧЕТОВ ИЗ GITHUB ACTIONS (АВТОНОМНАЯ ЦЕПОЧКА ВНУТРИ ВОРКФЛОУ)
+    // =========================================================================
+    {
+      parameters: { httpMethod: 'POST', path: 'github-actions-report', responseMode: 'onReceived', options: {} },
+      name: 'Webhook: Прием отчета из GitHub Actions',
+      type: 'n8n-nodes-base.webhook',
+      typeVersion: 2,
+      position: [7300, 260],
+      webhookId: crypto.randomUUID()
+    },
+    {
+      parameters: {
+        keepOnlySet: false,
+        values: {
+          string: [
+            { name: 'issueKey', value: '={{ $json.body.issueKey }}' },
+            { name: 'status', value: '={{ $json.body.status }}' },
+            { name: 'runUrl', value: '={{ $json.body.runUrl }}' },
+            { name: 'allureSummary', value: '={{ $json.body.allureSummary }}' }
+          ]
+        },
+        options: {}
+      },
+      name: 'Парсинг отчета Allure',
+      type: 'n8n-nodes-base.set',
+      typeVersion: 1,
+      position: [7520, 260]
+    },
+    {
+      parameters: {
+        resource: 'issue',
+        operation: 'addComment',
+        issueIdOrKey: '={{ $json.issueKey }}',
+        body: `={{
+          "h2. 📊 [Этап 8 из 8] Отчет о прохождении автотестов (GitHub Actions)\\n\\n" +
+          "*Статус:* " + ($json.status === "success" ? "(/) УСПЕШНО" : "(x) ОШИБКА") + "\\n" +
+          "*Сводка Allure:* " + $json.allureSummary + "\\n\\n" +
+          "[🔗 Посмотреть полный лог в GitHub|" + $json.runUrl + "]"
+        }}`
+      },
+      name: 'Jira: Опубликовать отчет Allure',
+      type: 'n8n-nodes-base.jira',
+      typeVersion: 1,
+      position: [7740, 260],
+      credentials: { jiraSoftwareCloudApi: { id: process.env.N8N_JIRA_CRED_ID || 'xnrgpIhThDJMtfMb', name: 'Jira Cloud (romeo-timony)' } }
+    }
   ]
 
   const link = (...targets) => ({ main: targets.map(t => (t ? [].concat(t).map(node => ({ node, type: 'main', index: 0 })) : [])) })
@@ -421,7 +506,11 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     ),
     
     'Перенос автотестов в рабочий проект': link('Jira: Финальный отчет о внедрении автотестов'),
-    'Jira: Финальный отчет о внедрении автотестов': link('Сохранение файлов на диск')
+    'Jira: Финальный отчет о внедрении автотестов': link('Сохранение файлов на диск'),
+    
+    // Подключения цепочки GitHub Actions
+    'Webhook: Прием отчета из GitHub Actions': link('Парсинг отчета Allure'),
+    'Парсинг отчета Allure': link('Jira: Опубликовать отчет Allure')
   }
 
   return { name: WORKFLOW_NAME, nodes, connections, settings: { executionOrder: 'v1', saveDataSuccessExecution: 'all' } }
