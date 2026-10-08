@@ -47,6 +47,22 @@ for (const item of $input.all()) {
     continue
   }
 
+  // Case D: Fallback for manual click "Execute Workflow" (Empty input)
+  if (Object.keys(json).length === 0) {
+    out.push({
+      json: {
+        issueKey: 'JS-16',
+        issueId: '10016',
+        fromStatus: 'К выполнению',
+        toStatus: 'В работе',
+        actor: 'manual-tester',
+        receivedAt: new Date().toISOString(),
+        config: CONFIG
+      }
+    })
+    continue
+  }
+
   // Case B: From Webhook
   const req = json
   if (CONFIG.webhookToken && (req.query || {}).token !== CONFIG.webhookToken) continue
