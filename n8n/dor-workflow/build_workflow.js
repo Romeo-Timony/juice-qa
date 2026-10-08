@@ -175,7 +175,32 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     // ⚙️ ОСНОВНАЯ ЕДИНАЯ ЛИНИЯ НОД (БЕЗ ОТРЫВОВ И ЗАВИСШИХ ЭЛЕМЕНТОВ)
     // =========================================================================
 
-    // 1. Приём задач
+    // 0. Прием событий Qase (Удаление тестов)
+    {
+      parameters: { httpMethod: 'POST', path: 'qase-events', responseMode: 'onReceived', options: {} },
+      name: 'Webhook: События Qase TMS',
+      type: 'n8n-nodes-base.webhook',
+      typeVersion: 2,
+      position: [0, 80],
+      webhookId: crypto.randomUUID()
+    },
+    {
+      parameters: {
+        jsCode: `
+          try {
+            const cp = require('child_process');
+            cp.execSync('python scripts/qase_lifecycle_sync.py --drift', { cwd: 'C:/Yandex.Disk/Рабочий стол/Juice_shop/qa-automation' });
+          } catch(e) {}
+          return [{ json: { success: true } }];
+        `
+      },
+      name: 'Синхронизация удаленных тестов (Drift)',
+      type: 'n8n-nodes-base.code',
+      typeVersion: 2,
+      position: [240, 80]
+    },
+
+    // 1. Приём задач из Jira
     {
       parameters: { httpMethod: 'POST', path: WEBHOOK_PATH, responseMode: 'onReceived', options: {} },
       name: 'Jira: Перехват обновления задачи',
@@ -443,6 +468,8 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
 
   const link = (...targets) => ({ main: targets.map(t => (t ? [].concat(t).map(node => ({ node, type: 'main', index: 0 })) : [])) })
   const connections = {
+    'Webhook: События Qase TMS': link('Синхронизация удаленных тестов (Drift)'),
+    
     'Jira: Перехват обновления задачи': link('Фильтр: Задача взята в работу'),
     'Execute Workflow Trigger': link('Фильтр: Задача взята в работу'),
     'Фильтр: Задача взята в работу': link('Jira: Загрузить данные задачи'),
