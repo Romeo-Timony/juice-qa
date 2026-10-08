@@ -11,7 +11,7 @@ const code = file => fs.readFileSync(path.join(NODES_DIR, file), 'utf8')
 function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiModel, qaseCode = 'JS' }) {
   const jiraCreds = { jiraSoftwareCloudApi: jiraCred }
   const qaseCreds = { httpHeaderAuth: qaseCred }
-  const FILTER = "$('Фильтр: Задача взята в работу').first().json"
+  const FILTER = "$('Фильтр: Задача взята в работу').item.json"
   const issueUrl = suffix => `={{ ${FILTER}.config.jiraBase + '/rest/api/2/issue/' + ${FILTER}.issueKey + '${suffix}' }}`
 
   const codeNode = (name, file, position, replacements = {}) => {
@@ -48,10 +48,10 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
   })
 
   const commentBody = '={{ JSON.stringify({ body: $json.commentBody }) }}'
-  const casesReportBody = "={{ JSON.stringify({ body: $('Создание тест-кейсов без повторов').first().json.casesReport }) }}"
-  const rtmCommentBody = "={{ JSON.stringify({ body: $('Создание тест-кейсов без повторов').first().json.rtmCommentBody }) }}"
-  const gate1CardBody = "={{ JSON.stringify({ body: $('Контроль 1: Подтверждение тест-кейсов').first().json.gate1ReviewCard }) }}"
-  const pollJql = encodeURIComponent('project = JS AND status = 10046 AND (labels is EMPTY OR labels not in (qa-dor-passed, qa-dor-failed, qa-dor-error))')
+  const casesReportBody = "={{ JSON.stringify({ body: $('Создание тест-кейсов без повторов').item.json.casesReport }) }}"
+  const rtmCommentBody = "={{ JSON.stringify({ body: $('Создание тест-кейсов без повторов').item.json.rtmCommentBody }) }}"
+  const gate1CardBody = "={{ JSON.stringify({ body: $('Контроль 1: Подтверждение тест-кейсов').item.json.gate1ReviewCard }) }}"
+  const pollJql = 'project = JS AND status = 10046 AND (labels is EMPTY OR labels not in (qa-dor-passed, qa-dor-failed, qa-dor-error))'
 
   const nodes = [
     // =========================================================================
@@ -220,7 +220,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       parameters: {
         authentication: 'predefinedCredentialType',
         nodeCredentialType: 'jiraSoftwareCloudApi',
-        url: '={{ $json.config.jiraBase }}/rest/api/3/search',
+        url: 'https://romeo-timony.atlassian.net/rest/api/3/search',
         sendQuery: true,
         queryParameters: {
           parameters: [
@@ -331,7 +331,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
           conditions: [
             {
               id: 'cond_gate1_passed',
-              leftValue: "={{ $('Контроль 1: Подтверждение тест-кейсов').first().json.gate1.passed }}",
+              leftValue: "={{ $('Контроль 1: Подтверждение тест-кейсов').item.json.gate1.passed }}",
               rightValue: true,
               operator: { type: 'boolean', operation: 'equals' }
             }
@@ -357,7 +357,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
           conditions: [
             {
               id: 'cond_new_cases',
-              leftValue: "={{ $('Создание тест-кейсов без повторов').first().json.hasNewCases }}",
+              leftValue: "={{ $('Создание тест-кейсов без повторов').item.json.hasNewCases }}",
               rightValue: true,
               operator: { type: 'boolean', operation: 'equals' }
             }
@@ -378,7 +378,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
         nodeCredentialType: 'httpHeaderAuth',
         sendBody: true,
         specifyBody: 'json',
-        jsonBody: "={{ JSON.stringify({ cases: $('Создание тест-кейсов без повторов').first().json.qaseCases }) }}",
+        jsonBody: "={{ JSON.stringify({ cases: $('Создание тест-кейсов без повторов').item.json.qaseCases }) }}",
         options: {}
       },
       name: 'Qase: Создать новые тесты в базе',
@@ -408,7 +408,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       '={{ JSON.stringify({ body: "h3. ⏳ [Этап 6 из 7] Автотесты сгенерированы. Ожидание проверки кода (Gate 2)..." }) }}'),
     codeNode('Контроль 2: Проверка качества кода тестов', '12_gate2_review_autotests.js', [5980, 260]),
     jira('Jira: Карточка проверки кода (Gate 2)', 'POST', issueUrl('/comment'), [6200, 260],
-      "={{ JSON.stringify({ body: $('Контроль 2: Проверка качества кода тестов').first().json.autotestCommentBody }) }}"),
+      "={{ JSON.stringify({ body: $('Контроль 2: Проверка качества кода тестов').item.json.autotestCommentBody }) }}"),
     {
       parameters: {
         conditions: {
@@ -416,7 +416,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
           conditions: [
             {
               id: 'cond_gate2_passed',
-              leftValue: "={{ $('Контроль 2: Проверка качества кода тестов').first().json.gate2.passed }}",
+              leftValue: "={{ $('Контроль 2: Проверка качества кода тестов').item.json.gate2.passed }}",
               rightValue: true,
               operator: { type: 'boolean', operation: 'equals' }
             }
@@ -434,7 +434,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
 
     codeNode('Перенос автотестов в рабочий проект', '13_promote_autotests.js', [6640, 260]),
     jira('Jira: Финальный отчет о внедрении автотестов', 'POST', issueUrl('/comment'), [6860, 260],
-      "={{ JSON.stringify({ body: $('Перенос автотестов в рабочий проект').first().json.finalReportCommentBody }) }}"),
+      "={{ JSON.stringify({ body: $('Перенос автотестов в рабочий проект').item.json.finalReportCommentBody }) }}"),
     
     // Нода для записи сгенерированных файлов на диск (использует fs)
     codeNode('Сохранение файлов на диск', '14_write_files.js', [7080, 260]),
@@ -472,24 +472,13 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       typeVersion: 1,
       position: [7520, 260]
     },
-    {
-      parameters: {
-        resource: 'issue',
-        operation: 'addComment',
-        issueIdOrKey: '={{ $json.issueKey }}',
-        body: `={{
+    jira('Jira: Опубликовать отчет Allure', 'POST', 'https://romeo-timony.atlassian.net/rest/api/2/issue/{{ $json.issueKey }}/comment', [7740, 260],
+      `={{ JSON.stringify({ body:
           "h2. 📊 [Этап 8 из 8] Отчет о прохождении автотестов (GitHub Actions)\\n\\n" +
           "*Статус:* " + ($json.status === "success" ? "(/) УСПЕШНО" : "(x) ОШИБКА") + "\\n" +
           "*Сводка Allure:* " + $json.allureSummary + "\\n\\n" +
           "[🔗 Посмотреть полный лог в GitHub|" + $json.runUrl + "]"
-        }}`
-      },
-      name: 'Jira: Опубликовать отчет Allure',
-      type: 'n8n-nodes-base.jira',
-      typeVersion: 1,
-      position: [7740, 260],
-      credentials: { jiraSoftwareCloudApi: { id: process.env.N8N_JIRA_CRED_ID || 'xnrgpIhThDJMtfMb', name: 'Jira Cloud (romeo-timony)' } }
-    }
+      }) }}`)
   ]
 
   const link = (...targets) => ({ main: targets.map(t => (t ? [].concat(t).map(node => ({ node, type: 'main', index: 0 })) : [])) })
