@@ -30,6 +30,10 @@ try {
     fs.writeFileSync(absPath, f.finalCode, 'utf8');
     savedCount++;
   }
+
+  // Записываем ID текущего выполнения n8n для GitHub Actions
+  const execMetaPath = path.join(baseDir, 'n8n_execution.json');
+  fs.writeFileSync(execMetaPath, JSON.stringify({ executionId: $execution.id }), 'utf8');
 } catch (e) {
   errors.push(e.message);
 }

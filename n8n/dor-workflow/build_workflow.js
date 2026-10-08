@@ -185,24 +185,12 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       webhookId: crypto.randomUUID()
     },
     {
-      parameters: {
-        rule: {
-          interval: [{ field: 'minutes', minutesInterval: 1 }]
-        }
-      },
-      name: 'Расписание: Проверка задач (1 мин)',
-      type: 'n8n-nodes-base.scheduleTrigger',
-      typeVersion: 1.2,
-      position: [-200, 320]
-    },
-    {
       parameters: {},
       name: 'Execute Workflow Trigger',
       type: 'n8n-nodes-base.executeWorkflowTrigger',
       typeVersion: 1,
-      position: [-200, 180]
+      position: [0, 320]
     },
-    jira('Jira: Найти задачи В работе', 'GET', `https://romeo-timony.atlassian.net/rest/api/3/search/jql?jql=${pollJql}&fields=summary,assignee,status`, [0, 320]),
 
     // 2. Проверка готовности (DoR)
     codeNode('Фильтр: Задача взята в работу', '01_filter_event.js', [240, 260], {
@@ -401,13 +389,17 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     codeNode('Сохранение файлов на диск', '14_write_files.js', [7080, 260]),
 
     // =========================================================================
-    // 8. ПРИЕМ ОТЧЕТОВ ИЗ GITHUB ACTIONS (АВТОНОМНАЯ ЦЕПОЧКА ВНУТРИ ВОРКФЛОУ)
+    // 8. ПРИЕМ ОТЧЕТОВ ИЗ GITHUB ACTIONS (ОЖИДАНИЕ)
     // =========================================================================
     {
-      parameters: { httpMethod: 'POST', path: 'github-actions-report', responseMode: 'onReceived', options: {} },
-      name: 'Webhook: Прием отчета из GitHub Actions',
-      type: 'n8n-nodes-base.webhook',
-      typeVersion: 2,
+      parameters: {
+        resume: 'webhook',
+        webhookSuffix: 'github-actions-report',
+        options: {}
+      },
+      name: 'Wait: Ожидание результатов GitHub Actions',
+      type: 'n8n-nodes-base.wait',
+      typeVersion: 1,
       position: [7300, 260],
       webhookId: crypto.randomUUID()
     },
@@ -452,9 +444,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
   const link = (...targets) => ({ main: targets.map(t => (t ? [].concat(t).map(node => ({ node, type: 'main', index: 0 })) : [])) })
   const connections = {
     'Jira: Перехват обновления задачи': link('Фильтр: Задача взята в работу'),
-    'Расписание: Проверка задач (1 мин)': link('Jira: Найти задачи В работе'),
     'Execute Workflow Trigger': link('Фильтр: Задача взята в работу'),
-    'Jira: Найти задачи В работе': link('Фильтр: Задача взята в работу'),
     'Фильтр: Задача взята в работу': link('Jira: Загрузить данные задачи'),
     'Jira: Загрузить данные задачи': link('Jira: Загрузить ссылки задачи'),
     'Jira: Загрузить ссылки задачи': link('Правила проверки готовности задачи'),
@@ -509,7 +499,8 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     'Jira: Финальный отчет о внедрении автотестов': link('Сохранение файлов на диск'),
     
     // Подключения цепочки GitHub Actions
-    'Webhook: Прием отчета из GitHub Actions': link('Парсинг отчета Allure'),
+    'Сохранение файлов на диск': link('Wait: Ожидание результатов GitHub Actions'),
+    'Wait: Ожидание результатов GitHub Actions': link('Парсинг отчета Allure'),
     'Парсинг отчета Allure': link('Jira: Опубликовать отчет Allure')
   }
 

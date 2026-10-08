@@ -33,8 +33,8 @@ jobs:
       continue-on-error: true
       id: backend_tests
       run: |
-        if [ -d "qa-automation/tests/backend" ]; then
-          pytest qa-automation/tests/backend/ -v --alluredir=allure-results
+        if [ -d "tests/backend" ]; then
+          pytest tests/backend/ -v --alluredir=allure-results
         else
           echo "Backend tests folder not found, skipping."
         fi
@@ -43,8 +43,8 @@ jobs:
       continue-on-error: true
       id: frontend_tests
       run: |
-        if [ -d "qa-automation/tests/frontend" ]; then
-          pytest qa-automation/tests/frontend/ -v --alluredir=allure-results
+        if [ -d "tests/frontend" ]; then
+          pytest tests/frontend/ -v --alluredir=allure-results
         else
           echo "Frontend tests folder not found, skipping."
         fi
@@ -68,9 +68,20 @@ jobs:
           STATUS="failed"
         fi
         
-        curl -X POST http://201.34.147.33:5678/webhook/github-actions-report \
-          -H "Content-Type: application/json" \
-          -d "{\"issueKey\": \"${{ steps.extract_key.outputs.issue_key }}\", \"status\": \"$STATUS\", \"runUrl\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\", \"allureSummary\": \"Тесты завершены (см. артефакты GitHub Actions)\"}"
+        # Read execution ID
+        EXEC_ID=""
+        if [ -f "n8n_execution.json" ]; then
+          EXEC_ID=$(cat n8n_execution.json | jq -r '.executionId')
+        fi
+        
+        if [ -n "$EXEC_ID" ]; then
+          echo "Sending report to n8n execution $EXEC_ID..."
+          curl -X POST http://201.34.147.33:5678/webhook-waiting/$EXEC_ID/github-actions-report \
+            -H "Content-Type: application/json" \
+            -d "{\"issueKey\": \"${{ steps.extract_key.outputs.issue_key }}\", \"status\": \"$STATUS\", \"runUrl\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\", \"allureSummary\": \"Тесты завершены (см. артефакты GitHub Actions)\"}"
+        else
+          echo "No n8n execution ID found, skipping webhook notification."
+        fi
 
     - name: Upload Allure Results as Artifact
       uses: actions/upload-artifact@v4
