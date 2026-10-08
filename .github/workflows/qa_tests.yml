@@ -5,7 +5,6 @@ on:
     branches:
       - master
       - main
-      - 'qa/*'
   pull_request:
     branches:
       - master
