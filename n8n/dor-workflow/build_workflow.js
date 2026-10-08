@@ -225,7 +225,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
         queryParameters: {
           parameters: [
             { name: 'jql', value: pollJql },
-            { name: 'fields', value: 'summary,status,assignee' }
+            { name: 'fields', value: 'key,summary,status,assignee' }
           ]
         },
         options: {}
