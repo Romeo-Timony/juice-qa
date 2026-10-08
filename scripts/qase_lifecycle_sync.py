@@ -193,21 +193,21 @@ def sync_single_case(case_id: int):
     # Случай 1: Кейс удален в Qase TMS
     if case_data is None:
         print(f"\n🗑️ Тест-кейс #{case_id} был УДАЛЕН из Qase TMS!")
-        print("Подготовка предложения на деактивацию в staging tests/review/...")
-        # Помещаем в review помеченную версию с @pytest.mark.skip
-        review_dest = REVIEW_DIR / local_test["layer"]
-        review_dest.mkdir(parents=True, exist_ok=True)
         file_path = Path(local_test["file"])
         orig_content = file_path.read_text(encoding="utf-8")
-        # Добавляем метку skip к функции
-        modified = orig_content.replace(
-            f"def {local_test['function_name']}",
-            f"@pytest.mark.skip(reason='Deprecated: Qase case #{case_id} was deleted')\n    def {local_test['function_name']}"
-        )
-        staging_file = review_dest / file_path.name
-        staging_file.write_text(modified, encoding="utf-8")
-        print(f"✅ Подготовлен файл с деактивацией: {staging_file}")
-        print("Запустите scripts/hitl_review_gate.py --audit для утверждения командой.")
+        
+        import ast
+        try:
+            tree = ast.parse(orig_content)
+            tests_in_file = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
+            if len(tests_in_file) <= 1:
+                file_path.unlink(missing_ok=True)
+                print(f"✅ Файл {file_path} полностью удален, так как связанный тест-кейс удален в Qase.")
+            else:
+                print(f"⚠️ Внимание: в файле {file_path} есть другие тесты. Автоматическое удаление отдельной функции не выполнено. Пожалуйста, удалите тест {local_test['function_name']} вручную.")
+        except SyntaxError:
+            file_path.unlink(missing_ok=True)
+            print(f"✅ Файл {file_path} удален.")
         return
 
     # Случай 2: Кейс изменен/актуален в Qase TMS
