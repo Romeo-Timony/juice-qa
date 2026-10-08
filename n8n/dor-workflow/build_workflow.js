@@ -220,7 +220,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       parameters: {
         authentication: 'predefinedCredentialType',
         nodeCredentialType: 'jiraSoftwareCloudApi',
-        url: 'https://romeo-timony.atlassian.net/rest/api/3/search',
+        url: 'https://romeo-timony.atlassian.net/rest/api/3/search/jql',
         sendQuery: true,
         queryParameters: {
           parameters: [
