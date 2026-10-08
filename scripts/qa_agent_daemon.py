@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
 
 # --- Настройка системы логирования ---
 LOG_DIR = BASE_DIR / "logs"
@@ -81,6 +82,7 @@ def git_commit_and_push(issue_key: str):
         # Индексируем файлы
         subprocess.run(["git", "add", "tests/backend/"], cwd=BASE_DIR, check=True, capture_output=True)
         subprocess.run(["git", "add", "tests/frontend/"], cwd=BASE_DIR, check=True, capture_output=True)
+        subprocess.run(["git", "add", "n8n_execution.json"], cwd=BASE_DIR, capture_output=True)
         
         status = subprocess.run(["git", "status", "--porcelain"], cwd=BASE_DIR, capture_output=True, text=True)
         if not status.stdout.strip():
@@ -95,7 +97,7 @@ def git_commit_and_push(issue_key: str):
         subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}"], cwd=BASE_DIR, check=True, capture_output=True)
         
         logger.info("Пуш изменений на удаленный сервер...")
-        push_res = subprocess.run(["git", "push", "-u", "qa", branch_name], cwd=BASE_DIR, capture_output=True, text=True)
+        push_res = subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=BASE_DIR, capture_output=True, text=True)
         if push_res.returncode != 0:
             logger.warning(f"Коммит создан локально, но пуш отклонен (Возможно, нет прав 403): {push_res.stderr.strip()}")
         else:
