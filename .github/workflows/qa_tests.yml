@@ -26,21 +26,55 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest playwright requests pytest-playwright
+        pip install pytest playwright requests pytest-playwright allure-pytest
         playwright install chromium
 
     - name: Run Backend API Tests
+      continue-on-error: true
+      id: backend_tests
       run: |
         if [ -d "qa-automation/tests/backend" ]; then
-          pytest qa-automation/tests/backend/ -v
+          pytest qa-automation/tests/backend/ -v --alluredir=allure-results
         else
           echo "Backend tests folder not found, skipping."
         fi
 
     - name: Run Frontend UI Tests
+      continue-on-error: true
+      id: frontend_tests
       run: |
         if [ -d "qa-automation/tests/frontend" ]; then
-          pytest qa-automation/tests/frontend/ -v
+          pytest qa-automation/tests/frontend/ -v --alluredir=allure-results
         else
           echo "Frontend tests folder not found, skipping."
         fi
+
+    - name: Get Issue Key from Branch
+      id: extract_key
+      run: |
+        # Extract JS-XX from qa/js-xx
+        BRANCH_NAME=${GITHUB_REF#refs/heads/}
+        ISSUE_KEY=$(echo "$BRANCH_NAME" | grep -o -E 'qa/js-[0-9]+' | sed 's/qa\///' | tr 'a-z' 'A-Z')
+        if [ -z "$ISSUE_KEY" ]; then ISSUE_KEY="JS-UNKNOWN"; fi
+        echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
+
+    - name: Send Report to n8n Webhook
+      if: always()
+      run: |
+        # Check overall status
+        if [ "${{ steps.backend_tests.outcome }}" == "success" ] && [ "${{ steps.frontend_tests.outcome }}" == "success" ]; then
+          STATUS="success"
+        else
+          STATUS="failed"
+        fi
+        
+        curl -X POST http://201.34.147.33:5678/webhook/github-actions-report \
+          -H "Content-Type: application/json" \
+          -d "{\"issueKey\": \"${{ steps.extract_key.outputs.issue_key }}\", \"status\": \"$STATUS\", \"runUrl\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\", \"allureSummary\": \"Тесты завершены (см. артефакты GitHub Actions)\"}"
+
+    - name: Upload Allure Results as Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: allure-results
+        path: allure-results
