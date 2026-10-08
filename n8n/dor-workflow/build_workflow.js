@@ -233,7 +233,8 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       name: 'Jira: Найти задачи В работе',
       type: 'n8n-nodes-base.httpRequest',
       typeVersion: 4.2,
-      position: [240, 320]
+      position: [240, 320],
+      credentials: jiraCreds
     },
     {
       parameters: {},
