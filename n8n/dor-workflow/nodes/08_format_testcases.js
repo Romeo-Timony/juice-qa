@@ -30,41 +30,17 @@ const isBackend = kind === 'backend'
 const qaseToken = '__QASE_TOKEN__'
 const qaseCode = '__QASE_CODE__'
 
-// Helper to create suites in Qase TMS
-async function qasePost (endpoint, data) {
-  const url = `https://api.qase.io/v1/${endpoint}`
-  if (typeof fetch !== 'undefined') {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Token: qaseToken,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
-    })
-    return await res.json()
-  }
-  const https = require('https')
-  return new Promise((resolve, reject) => {
-    const u = new URL(url)
-    const req = https.request({
-      hostname: u.hostname,
-      path: u.pathname + u.search,
-      method: 'POST',
-      headers: {
-        Token: qaseToken,
-        'Content-Type': 'application/json'
-      }
-    }, res => {
-      let raw = ''
-      res.on('data', chunk => { raw += chunk })
-      res.on('end', () => {
-        try { resolve(JSON.parse(raw)) } catch (e) { resolve(null) }
-      })
-    })
-    req.on('error', reject)
-    req.write(JSON.stringify(data))
-    req.end()
+// Helper to create suites in Qase TMS using n8n this.helpers.httpRequest
+const qasePost = async (endpoint, data) => {
+  return await this.helpers.httpRequest({
+    method: 'POST',
+    url: `https://api.qase.io/v1/${endpoint}`,
+    headers: {
+      Token: qaseToken,
+      'Content-Type': 'application/json'
+    },
+    body: data,
+    json: true
   })
 }
 
