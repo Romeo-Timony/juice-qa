@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - 'qa/*'
   pull_request:
     branches:
       - master
@@ -74,7 +75,10 @@ jobs:
           EXEC_ID=$(cat n8n_execution.json | jq -r '.executionId')
         fi
         
-        if [ -n "$EXEC_ID" ]; then
+        ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
+        if [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then
+          echo "Issue key could not be determined from branch, skipping webhook notification."
+        elif [ -n "$EXEC_ID" ] && [ "$EXEC_ID" != "null" ]; then
           echo "Sending report to n8n execution $EXEC_ID..."
           curl -X POST http://201.34.147.33:5678/webhook-waiting/$EXEC_ID/github-actions-report \
             -H "Content-Type: application/json" \
