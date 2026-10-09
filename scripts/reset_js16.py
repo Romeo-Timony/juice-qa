@@ -42,6 +42,11 @@ def reset_js16():
     print("--- 🗑️ Clearing SQLite ---")
     conn = sqlite3.connect("data/qa_pipeline.db")
     conn.execute("DELETE FROM pipeline_tasks WHERE issue_key = 'JS-16'")
+    # Delete execution marker
+    if os.path.exists("n8n_execution.json"):
+        os.remove("n8n_execution.json")
+        print("Deleted n8n_execution.json")
+
     # Check if task_stages exists first or ignore error
     try:
         conn.execute("DELETE FROM task_stages WHERE issue_key = 'JS-16'")
@@ -51,20 +56,28 @@ def reset_js16():
 
     print("--- 🗑️ Resetting Jira JS-16 ---")
     auth = (JIRA_USER, JIRA_TOKEN)
+
+    # 1. Transition to 'К выполнению' (Status ID: 11)
+    requests.post(f"{JIRA_URL}/rest/api/3/issue/JS-16/transitions", json={"transition": {"id": "11"}}, auth=auth)
+    print("Transitioned JS-16 to 'К выполнению'")
     
-    # 1. Clear labels
+    # 2. Clear labels
     requests.put(f"{JIRA_URL}/rest/api/3/issue/JS-16", json={"update": {"labels": [{"set": []}]}}, auth=auth)
     print("Cleared Jira labels")
     
-    # 2. Delete comments
+    # 3. Delete comments
     res = requests.get(f"{JIRA_URL}/rest/api/3/issue/JS-16", auth=auth)
     comments = res.json().get('fields', {}).get('comment', {}).get('comments', [])
     for c in comments:
         requests.delete(f"{JIRA_URL}/rest/api/3/issue/JS-16/comment/{c['id']}", auth=auth)
         print(f"Deleted Jira comment {c['id']}")
 
-    # 3. Transition to 'К выполнению' (Status ID: 11) or 'В работе'
-    # requests.post(f"{JIRA_URL}/rest/api/3/issue/JS-16/transitions", json={"transition": {"id": "11"}}, auth=auth)
+def start_js16():
+    print("--- 🚀 Transitioning JS-16 to 'В работе' ---")
+    auth = (JIRA_USER, JIRA_TOKEN)
+    res = requests.post(f"{JIRA_URL}/rest/api/3/issue/JS-16/transitions", json={"transition": {"id": "21"}}, auth=auth)
+    print("Transition response:", res.status_code)
 
 if __name__ == "__main__":
     reset_js16()
+    start_js16()
