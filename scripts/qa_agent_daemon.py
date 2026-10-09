@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import time
 import requests
 import sqlite3
@@ -42,6 +44,8 @@ load_dotenv(BASE_DIR / ".env")
 JIRA_URL = (os.getenv("ATLASSIAN_BASE_URL") or "https://romeo-timony.atlassian.net").rstrip('/')
 JIRA_EMAIL = os.getenv("ATLASSIAN_USER_EMAIL")
 JIRA_TOKEN = os.getenv("ATLASSIAN_API_TOKEN")
+N8N_URL = (os.getenv("N8N_URL") or os.getenv("N8N_SERVER_URL") or "http://201.34.147.33:5678").rstrip('/')
+N8N_API_KEY = os.getenv("N8N_API_KEY")
 
 def get_in_progress_issues():
     url = f"{JIRA_URL}/rest/api/3/search/jql"
@@ -53,6 +57,29 @@ def get_in_progress_issues():
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка связи с API Jira: Не удалось получить задачи. Подробности: {e}")
         return []
+
+def get_latest_execution_id(comments: list):
+    for c in reversed(comments):
+        match = re.search(r"\[N8N_EXECUTION_ID:\s*([^\]]+)\]", str(c.get("body", {})))
+        if match:
+            return match.group(1).strip()
+    return None
+
+def get_resume_token(exec_id: str):
+    """Waiting webhooks in n8n require ?signature=<resumeToken>; it is only persisted once the execution reaches the Wait node."""
+    try:
+        res = requests.get(
+            f"{N8N_URL}/api/v1/executions/{exec_id}",
+            headers={"X-N8N-API-KEY": N8N_API_KEY},
+            params={"includeData": "true"},
+            timeout=30
+        )
+        res.raise_for_status()
+        execution = res.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка связи с API n8n для execution {exec_id}: {e}")
+        return None, None
+    return execution.get("status"), (execution.get("data") or {}).get("resumeToken")
 
 def update_sqlite(issue_key: str):
     logger.info(f"Обновление локальной базы SQLite для задачи {issue_key}...")
@@ -74,45 +101,52 @@ def update_sqlite(issue_key: str):
     except Exception as e:
         logger.error(f"Системная ошибка при обновлении SQLite: {e}", exc_info=True)
 
-def git_commit_and_push(issue_key: str):
+def git(*args, check=True):
+    return subprocess.run(["git", *args], cwd=BASE_DIR, check=check, capture_output=True, text=True)
+
+def prepare_branch(issue_key: str) -> str:
+    """Branch off the latest origin/main so the pushed commit carries the current GitHub Actions workflow."""
+    branch_name = f"qa/{issue_key.lower()}"
+    logger.info(f"Подготовка ветки {branch_name} от origin/main...")
+    git("fetch", "origin")
+    git("checkout", "-B", branch_name, "origin/main")
+    return branch_name
+
+def git_commit_and_push(issue_key: str, branch_name: str) -> bool:
     logger.info(f"Выполнение Git-операций для задачи {issue_key}...")
     try:
-        branch_name = f"qa/{issue_key.lower()}"
-        
         # Индексируем файлы
-        subprocess.run(["git", "add", "tests/backend/"], cwd=BASE_DIR, check=True, capture_output=True)
-        subprocess.run(["git", "add", "tests/frontend/"], cwd=BASE_DIR, check=True, capture_output=True)
-        subprocess.run(["git", "add", "n8n_execution.json"], cwd=BASE_DIR, capture_output=True)
-        
-        status = subprocess.run(["git", "status", "--porcelain"], cwd=BASE_DIR, capture_output=True, text=True)
-        if not status.stdout.strip():
-            logger.info("Нет изменений для коммита. Пропускаем.")
-            return
+        git("add", "tests/backend/", "tests/frontend/")
+        git("add", "n8n_execution.json", check=False)
 
-        # Переключаемся на новую ветку для безопасной работы команды
-        logger.info(f"Создание новой ветки: {branch_name}")
-        subprocess.run(["git", "checkout", "-b", branch_name], cwd=BASE_DIR, capture_output=True)
+        if git("diff", "--cached", "--quiet", check=False).returncode == 0:
+            logger.info("Нет изменений для коммита. Пропускаем.")
+            return False
 
         logger.info("Создание коммита...")
-        subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}"], cwd=BASE_DIR, check=True, capture_output=True)
-        
-        logger.info("Пуш изменений на удаленный сервер...")
-        push_res = subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=BASE_DIR, capture_output=True, text=True)
+        git("commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}")
+
+        logger.info(f"Пуш ветки {branch_name} на удаленный сервер...")
+        push_res = git("push", "-u", "--force-with-lease", "origin", branch_name, check=False)
         if push_res.returncode != 0:
-            logger.warning(f"Коммит создан локально, но пуш отклонен (Возможно, нет прав 403): {push_res.stderr.strip()}")
-        else:
-            logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий!")
-            
+            logger.error(f"Коммит создан локально, но пуш отклонен: {push_res.stderr.strip()}")
+            return False
+        logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий!")
+        return True
+
     except subprocess.CalledProcessError as e:
         logger.error(f"Критическая ошибка выполнения Git команд. Код возврата: {e.returncode}. Вывод: {e.stderr}")
     except Exception as e:
         logger.error(f"Непредвиденная ошибка в Git-операциях: {e}", exc_info=True)
+    return False
 
 def daemon_loop():
     logger.info("🚀 Запуск QA Агента-демона (Jira Poller). Ожидание задач...")
     
     if str(BASE_DIR / "scripts") not in sys.path:
         sys.path.insert(0, str(BASE_DIR / "scripts"))
+
+    announced_pending = set()
         
     while True:
         try:
@@ -129,34 +163,43 @@ def daemon_loop():
                     ui_file = BASE_DIR / f"tests/frontend/test_{safe_key}_ui.py"
                     
                     if not api_file.exists() or not ui_file.exists():
+                        # Извлечение N8N_EXECUTION_ID из последнего комментария Stage 7
+                        exec_id = get_latest_execution_id(comments)
+                        resume_token = None
+                        if exec_id:
+                            status, resume_token = get_resume_token(exec_id)
+                            if status != "waiting" or not resume_token:
+                                if exec_id not in announced_pending:
+                                    logger.info(f"n8n execution {exec_id} для {issue_key} в статусе '{status}', ждём перехода в 'waiting'...")
+                                    announced_pending.add(exec_id)
+                                continue
+                        else:
+                            logger.warning("N8N_EXECUTION_ID не найден в комментариях Jira! Stage 8 не будет получен.")
+
                         logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
                         try:
-                            # Извлечение N8N_EXECUTION_ID из комментария
-                            exec_id = None
-                            for c in comments:
-                                body = str(c.get("body", {}))
-                                if "[N8N_EXECUTION_ID:" in body:
-                                    import re
-                                    match = re.search(r"\[N8N_EXECUTION_ID:\s*([^\]]+)\]", body)
-                                    if match:
-                                        exec_id = match.group(1).strip()
-                                        break
+                            branch_name = prepare_branch(issue_key)
+
+                            execution_file = BASE_DIR / "n8n_execution.json"
                             if exec_id:
-                                import json
-                                with open(BASE_DIR / "n8n_execution.json", "w") as f:
-                                    json.dump({"executionId": exec_id}, f)
+                                with open(execution_file, "w") as f:
+                                    json.dump({"executionId": exec_id, "resumeToken": resume_token}, f)
                                 logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
-                            else:
-                                logger.warning("N8N_EXECUTION_ID не найден в комментариях Jira!")
-                                
+                            elif execution_file.exists():
+                                execution_file.unlink()
+
                             from scaffold_dynamic import generate_tests
                             generate_tests(issue_key)
                             update_sqlite(issue_key)
-                            git_commit_and_push(issue_key)
-                            
+                            if not git_commit_and_push(issue_key, branch_name):
+                                logger.error(f"❌ Тесты для {issue_key} не отправлены в GitHub — GitHub Actions не запустится.")
+                                continue
+
                             from scripts.hitl_review_gate import add_jira_label
                             add_jira_label(issue_key, "qa-autotests-created")
                             logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
+                        except subprocess.CalledProcessError as e:
+                            logger.error(f"Ошибка подготовки Git-ветки для {issue_key}: {e.stderr}")
                         except ImportError as e:
                             logger.error(f"Ошибка импорта модулей генерации: {e}")
                         except Exception as ex:
