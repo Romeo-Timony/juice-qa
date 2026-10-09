@@ -31,10 +31,11 @@ def reset_js16():
             requests.delete(f"https://api.qase.io/v1/case/JS/{c['id']}", headers=headers)
             print(f"Deleted Qase case {c['id']}")
             
-    # Also delete suites to completely wipe
+    # Also delete suites to completely wipe (children first)
     res = requests.get("https://api.qase.io/v1/suite/JS?limit=100", headers=headers)
     if res.ok:
         suites = res.json().get('result', {}).get('entities', [])
+        suites.sort(key=lambda s: 0 if s.get('parent_id') else 1)
         for s in suites:
             requests.delete(f"https://api.qase.io/v1/suite/JS/{s['id']}", headers=headers)
             print(f"Deleted Qase suite {s['id']}")
