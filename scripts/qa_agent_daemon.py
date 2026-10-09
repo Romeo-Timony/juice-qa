@@ -163,18 +163,11 @@ def daemon_loop():
                     ui_file = BASE_DIR / f"tests/frontend/test_{safe_key}_ui.py"
                     
                     if not api_file.exists() or not ui_file.exists():
-                        # Извлечение N8N_EXECUTION_ID из последнего комментария Stage 7
                         exec_id = get_latest_execution_id(comments)
-                        resume_token = None
                         if exec_id:
-                            status, resume_token = get_resume_token(exec_id)
-                            if status != "waiting" or not resume_token:
-                                if exec_id not in announced_pending:
-                                    logger.info(f"n8n execution {exec_id} для {issue_key} в статусе '{status}', ждём перехода в 'waiting'...")
-                                    announced_pending.add(exec_id)
-                                continue
+                            logger.info(f"Найден n8n_execution ID: {exec_id} для {issue_key}")
                         else:
-                            logger.warning("N8N_EXECUTION_ID не найден в комментариях Jira! Stage 8 не будет получен.")
+                            logger.info("N8N_EXECUTION_ID не указан в комментариях Jira")
 
                         logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
                         try:
@@ -183,7 +176,7 @@ def daemon_loop():
                             execution_file = BASE_DIR / "n8n_execution.json"
                             if exec_id:
                                 with open(execution_file, "w") as f:
-                                    json.dump({"executionId": exec_id, "resumeToken": resume_token}, f)
+                                    json.dump({"executionId": exec_id}, f)
                                 logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
                             elif execution_file.exists():
                                 execution_file.unlink()

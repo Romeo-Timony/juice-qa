@@ -89,20 +89,9 @@ jobs:
           STATUS="failed"
         fi
 
-        EXEC_ID=""
-        RESUME_TOKEN=""
-        if [ -f "n8n_execution.json" ]; then
-          EXEC_ID=$(jq -r '.executionId // empty' n8n_execution.json)
-          RESUME_TOKEN=$(jq -r '.resumeToken // empty' n8n_execution.json)
-        fi
-
         ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
         if [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then
           echo "Issue key could not be determined from branch, skipping webhook notification."
-          exit 0
-        fi
-        if [ -z "$EXEC_ID" ] || [ -z "$RESUME_TOKEN" ]; then
-          echo "n8n executionId/resumeToken not found in n8n_execution.json, skipping webhook notification."
           exit 0
         fi
 
@@ -117,9 +106,9 @@ jobs:
           --arg allureSummary "$SUMMARY" \
           '{issueKey: $issueKey, status: $status, runUrl: $runUrl, allureSummary: $allureSummary}')
 
-        echo "Sending report to n8n execution $EXEC_ID..."
+        echo "Sending report to n8n webhook..."
         HTTP_CODE=$(curl -s -o response.txt -w '%{http_code}' -X POST \
-          "http://201.34.147.33:5678/webhook-waiting/$EXEC_ID/github-actions-report?signature=$RESUME_TOKEN" \
+          "http://201.34.147.33:5678/webhook/github-actions-report" \
           -H "Content-Type: application/json" \
           -d "$PAYLOAD")
         echo "n8n responded with HTTP $HTTP_CODE: $(cat response.txt)"

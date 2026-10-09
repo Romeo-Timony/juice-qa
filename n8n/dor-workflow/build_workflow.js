@@ -445,15 +445,17 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     // =========================================================================
     {
       parameters: {
-        resume: 'webhook',
-        webhookSuffix: 'github-actions-report',
+        path: 'github-actions-report',
+        httpMethod: 'POST',
+        respondWith: 'json',
+        responseBody: '{"success": true}',
         options: {}
       },
-      name: 'Wait: Ожидание результатов GitHub Actions',
-      type: 'n8n-nodes-base.wait',
+      name: 'Webhook: Прием отчетов GitHub Actions',
+      type: 'n8n-nodes-base.webhook',
       typeVersion: 1,
       position: [7300, 260],
-      webhookId: crypto.randomUUID()
+      webhookId: 'github-actions-report'
     },
     {
       parameters: {
@@ -473,7 +475,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       typeVersion: 1,
       position: [7520, 260]
     },
-    jira('Jira: Опубликовать отчет Allure', 'POST', 'https://romeo-timony.atlassian.net/rest/api/2/issue/{{ $json.issueKey }}/comment', [7740, 260],
+    jira('Jira: Опубликовать отчет Allure', 'POST', '={{ "https://romeo-timony.atlassian.net/rest/api/2/issue/" + $json.issueKey + "/comment" }}', [7740, 260],
       `={{ JSON.stringify({ body:
           "h2. 📊 [Этап 8 из 8] Отчет о прохождении автотестов (GitHub Actions)\\n\\n" +
           "*Статус:* " + ($json.status === "success" ? "(/) УСПЕШНО" : "(x) ОШИБКА") + "\\n" +
@@ -545,8 +547,7 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     'Jira: Финальный отчет о внедрении автотестов': link('Сохранение файлов на диск'),
     
     // Подключения цепочки GitHub Actions
-    'Сохранение файлов на диск': link('Wait: Ожидание результатов GitHub Actions'),
-    'Wait: Ожидание результатов GitHub Actions': link('Парсинг отчета Allure'),
+    'Webhook: Прием отчетов GitHub Actions': link('Парсинг отчета Allure'),
     'Парсинг отчета Allure': link('Jira: Опубликовать отчет Allure')
   }
 

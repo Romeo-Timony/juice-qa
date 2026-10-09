@@ -18,3 +18,9 @@ env/
 allure-results/
 allure-report/
 *.webm
+
+# Logs & Runtime
+logs/
+*.log
+n8n_execution.json
+data/*.db
