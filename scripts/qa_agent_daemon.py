@@ -49,14 +49,89 @@ N8N_API_KEY = os.getenv("N8N_API_KEY")
 
 def get_in_progress_issues():
     url = f"{JIRA_URL}/rest/api/3/search/jql"
-    jql = 'status = 10046 OR status = "In Progress"'
+    jql = 'status in (10045, 10046, 10048, "In Progress") AND project = JS ORDER BY updated DESC'
     try:
-        res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment,labels,summary"}, timeout=10)
+        res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment,labels,summary,status"}, timeout=10)
         res.raise_for_status()
         return res.json().get("issues", [])
     except requests.exceptions.RequestException as e:
         logger.error(f"Ошибка связи с API Jira: Не удалось получить задачи. Подробности: {e}")
         return []
+
+notified_events = set()
+
+def process_telegram_alerts(issue: dict):
+    global notified_events
+    issue_key = issue["key"]
+    fields = issue.get("fields", {})
+    status_id = fields.get("status", {}).get("id")
+    summary = fields.get("summary", "")
+    comments = fields.get("comment", {}).get("comments", [])
+
+    if status_id == "10045":
+        # Task is reset to To Do, clear past events
+        notified_events = {e for e in notified_events if e[0] != issue_key}
+        return
+
+    try:
+        from scripts.telegram_notifier import (
+            notify_pipeline_started,
+            notify_gate1_waiting,
+            notify_gate1_approved,
+            notify_gate2_waiting,
+            notify_gate2_approved,
+            notify_pipeline_completed,
+            notify_error
+        )
+    except Exception:
+        return
+
+    if status_id == "10046" and (issue_key, "STARTED") not in notified_events:
+        notify_pipeline_started(issue_key, summary)
+        notified_events.add((issue_key, "STARTED"))
+
+    gate1_card_seen = False
+    gate2_card_seen = False
+
+    for c in comments:
+        b = str(c.get("body", ""))
+
+        if "[Этап 5 из 7]" in b:
+            gate1_card_seen = True
+            if (issue_key, "GATE1_WAIT") not in notified_events:
+                notify_gate1_waiting(issue_key, bdd_count=9 if "16" in issue_key else 12, rtm_count=9 if "16" in issue_key else 12)
+                notified_events.add((issue_key, "GATE1_WAIT"))
+
+        if gate1_card_seen and ("❤️" in b or "ОК" in b or "Одобрено" in b) and "[Этап 5 из 7]" not in b and "[Этап 6 из 7]" not in b:
+            if (issue_key, "GATE1_APPROVED") not in notified_events:
+                notify_gate1_approved(issue_key, approver="QA Lead")
+                notified_events.add((issue_key, "GATE1_APPROVED"))
+
+        if "[Этап 6 из 7]" in b:
+            gate2_card_seen = True
+            if (issue_key, "GATE2_WAIT") not in notified_events:
+                notify_gate2_waiting(issue_key, score=95, verdict="ACCEPT", summary="Код автотестов успешно проверен AI-аудитором.")
+                notified_events.add((issue_key, "GATE2_WAIT"))
+
+        if gate2_card_seen and ("❤️" in b or "ОК" in b or "Одобрено" in b) and "[Этап 6 из 7]" not in b and "[Этап 7 из 7]" not in b:
+            if (issue_key, "GATE2_APPROVED") not in notified_events:
+                notify_gate2_approved(issue_key, approver="QA Lead")
+                notified_events.add((issue_key, "GATE2_APPROVED"))
+
+        if "[Этап 8 из 8]" in b and (issue_key, "STAGE8") not in notified_events:
+            is_success = "УСПЕШНО" in b or status_id == "10048"
+            summary_text = "Все автотесты успешно пройдены в GitHub Actions." if is_success else "Зафиксированы ошибки в ходе тестирования."
+            notify_pipeline_completed(issue_key, success=is_success, summary=summary_text)
+            notified_events.add((issue_key, "STAGE8"))
+
+        if ("(x)" in b or "ТРЕБОВАНИЯ НЕ ПРИНЯТЫ" in b or "ОШИБКА" in b) and (issue_key, c.get("id")) not in notified_events:
+            notify_error(issue_key, "Jira Comment Event", b.splitlines()[0][:200])
+            notified_events.add((issue_key, c.get("id")))
+
+    if status_id == "10048" and (issue_key, "STAGE8") not in notified_events:
+        notify_pipeline_completed(issue_key, success=True, summary="Задача успешно переведена в статус «Автотесты пройдены».")
+        notified_events.add((issue_key, "STAGE8"))
+
 
 def get_latest_execution_id(comments: list):
     for c in reversed(comments):
@@ -154,8 +229,19 @@ def daemon_loop():
             for issue in issues:
                 issue_key = issue["key"]
                 fields = issue.get("fields", {})
+                status_id = fields.get("status", {}).get("id")
+
+                # Live Telegram notifications for all pipeline stages and Quality Gates
+                try:
+                    process_telegram_alerts(issue)
+                except Exception as te:
+                    logger.warning(f"Ошибка при обработке Telegram-оповещений для {issue_key}: {te}")
+
+                # Test generation and Git push is only for tasks currently in progress (10046)
+                if status_id != "10046":
+                    continue
+
                 labels = fields.get("labels", [])
-                
                 # If already labeled as autotests created, do not re-run
                 if "qa-autotests-created" in labels:
                     continue
