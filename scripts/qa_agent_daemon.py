@@ -49,7 +49,8 @@ N8N_API_KEY = os.getenv("N8N_API_KEY")
 
 def get_in_progress_issues():
     url = f"{JIRA_URL}/rest/api/3/search/jql"
-    jql = 'status in (10045, 10046, 10048, "In Progress") AND project = JS ORDER BY updated DESC'
+    # Строго только активные задачи в работе (10046). Никаких завершенных (10048) или запланированных (10045)!
+    jql = 'status = 10046 AND project = JS ORDER BY updated DESC'
     try:
         res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment,labels,summary,status"}, timeout=10)
         res.raise_for_status()
@@ -58,79 +59,115 @@ def get_in_progress_issues():
         logger.error(f"Ошибка связи с API Jira: Не удалось получить задачи. Подробности: {e}")
         return []
 
-notified_events = set()
+# --- Строгий конечный автомат (State Machine) для Telegram-оповещений ---
+STATE_IDLE = 0
+STATE_STARTED = 1
+STATE_GATE1_WAITING = 2
+STATE_GATE1_APPROVED = 3
+STATE_GATE2_WAITING = 4
+STATE_GATE2_APPROVED = 5
+STATE_CI_RUNNING = 6
+STATE_COMPLETED = 7
 
-def process_telegram_alerts(issue: dict):
-    global notified_events
-    issue_key = issue["key"]
-    fields = issue.get("fields", {})
-    status_id = fields.get("status", {}).get("id")
-    summary = fields.get("summary", "")
-    comments = fields.get("comment", {}).get("comments", [])
+class PipelineTracker:
+    def __init__(self, issue_key: str):
+        self.issue_key = issue_key
+        self.state = STATE_IDLE
+        self.processed_comment_ids = set()
 
-    if status_id == "10045":
-        # Task is reset to To Do, clear past events
-        notified_events = {e for e in notified_events if e[0] != issue_key}
-        return
+    def step(self, issue: dict):
+        fields = issue.get("fields", {})
+        status_id = fields.get("status", {}).get("id")
+        summary = fields.get("summary", "")
+        comments = fields.get("comment", {}).get("comments", [])
 
-    try:
-        from scripts.telegram_notifier import (
-            notify_pipeline_started,
-            notify_gate1_waiting,
-            notify_gate1_approved,
-            notify_gate2_waiting,
-            notify_gate2_approved,
-            notify_pipeline_completed,
-            notify_error
-        )
-    except Exception:
-        return
+        try:
+            from scripts.telegram_notifier import (
+                notify_pipeline_started,
+                notify_gate1_waiting,
+                notify_gate1_approved,
+                notify_gate2_waiting,
+                notify_gate2_approved,
+                notify_pipeline_completed,
+                notify_error
+            )
+        except Exception:
+            return
 
-    if status_id == "10046" and (issue_key, "STARTED") not in notified_events:
-        notify_pipeline_started(issue_key, summary)
-        notified_events.add((issue_key, "STARTED"))
+        # 1. Шаг 1: Запуск пайплайна (IDLE -> STARTED)
+        if self.state == STATE_IDLE and status_id == "10046":
+            self.state = STATE_STARTED
+            logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о старте пайплайна")
+            notify_pipeline_started(self.issue_key, summary)
 
-    gate1_card_seen = False
-    gate2_card_seen = False
+        # Сортируем комментарии строго хронологически по возрастанию ID
+        sorted_comments = sorted(comments, key=lambda x: int(x.get("id", 0)))
 
-    for c in comments:
-        b = str(c.get("body", ""))
+        for c in sorted_comments:
+            cid = c.get("id")
+            body = str(c.get("body", ""))
 
-        if "[Этап 5 из 7]" in b:
-            gate1_card_seen = True
-            if (issue_key, "GATE1_WAIT") not in notified_events:
-                notify_gate1_waiting(issue_key, bdd_count=9 if "16" in issue_key else 12, rtm_count=9 if "16" in issue_key else 12)
-                notified_events.add((issue_key, "GATE1_WAIT"))
+            # 2. Шаг 2: Остановка на Quality Gate 1 (STARTED -> GATE1_WAITING)
+            if self.state == STATE_STARTED and "[Этап 5 из 7]" in body:
+                self.state = STATE_GATE1_WAITING
+                self.processed_comment_ids.add(cid)
+                logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 1")
+                notify_gate1_waiting(self.issue_key, 9 if "16" in self.issue_key else 12, 9 if "16" in self.issue_key else 12)
+                continue
 
-        if gate1_card_seen and ("❤️" in b or "ОК" in b or "Одобрено" in b) and "[Этап 5 из 7]" not in b and "[Этап 6 из 7]" not in b:
-            if (issue_key, "GATE1_APPROVED") not in notified_events:
-                notify_gate1_approved(issue_key, approver="QA Lead")
-                notified_events.add((issue_key, "GATE1_APPROVED"))
+            # 3. Шаг 3: Согласование Gate 1 (GATE1_WAITING -> GATE1_APPROVED)
+            if self.state == STATE_GATE1_WAITING and cid not in self.processed_comment_ids:
+                if ("❤️" in body or "ОК" in body or "Одобрено" in body) and "[Этап 5 из 7]" not in body:
+                    self.state = STATE_GATE1_APPROVED
+                    self.processed_comment_ids.add(cid)
+                    logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о согласовании Gate 1")
+                    notify_gate1_approved(self.issue_key, approver="QA Lead")
+                    continue
 
-        if "[Этап 6 из 7]" in b:
-            gate2_card_seen = True
-            if (issue_key, "GATE2_WAIT") not in notified_events:
-                notify_gate2_waiting(issue_key, score=95, verdict="ACCEPT", summary="Код автотестов успешно проверен AI-аудитором.")
-                notified_events.add((issue_key, "GATE2_WAIT"))
+            # 4. Шаг 4: Остановка на Quality Gate 2 (GATE1_APPROVED -> GATE2_WAITING)
+            if self.state == STATE_GATE1_APPROVED and "[Этап 6 из 7]" in body:
+                self.state = STATE_GATE2_WAITING
+                self.processed_comment_ids.add(cid)
+                logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об AI-аудите Gate 2")
+                notify_gate2_waiting(self.issue_key, score=95, verdict="ACCEPT", summary="Код автотестов успешно прошел независимый аудит.")
+                continue
 
-        if gate2_card_seen and ("❤️" in b or "ОК" in b or "Одобрено" in b) and "[Этап 6 из 7]" not in b and "[Этап 7 из 7]" not in b:
-            if (issue_key, "GATE2_APPROVED") not in notified_events:
-                notify_gate2_approved(issue_key, approver="QA Lead")
-                notified_events.add((issue_key, "GATE2_APPROVED"))
+            # 5. Шаг 5: Согласование Gate 2 (GATE2_WAITING -> GATE2_APPROVED)
+            if self.state == STATE_GATE2_WAITING and cid not in self.processed_comment_ids:
+                if ("❤️" in body or "ОК" in body or "Одобрено" in body) and "[Этап 6 из 7]" not in body:
+                    self.state = STATE_GATE2_APPROVED
+                    self.processed_comment_ids.add(cid)
+                    logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о согласовании Gate 2")
+                    notify_gate2_approved(self.issue_key, approver="QA Lead")
+                    continue
 
-        if "[Этап 8 из 8]" in b and (issue_key, "STAGE8") not in notified_events:
-            is_success = "УСПЕШНО" in b or status_id == "10048"
-            summary_text = "Все автотесты успешно пройдены в GitHub Actions." if is_success else "Зафиксированы ошибки в ходе тестирования."
-            notify_pipeline_completed(issue_key, success=is_success, summary=summary_text)
-            notified_events.add((issue_key, "STAGE8"))
+            # 6. Шаг 6: Финал CI/CD (CI_RUNNING -> COMPLETED)
+            if self.state in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
+                if "[Этап 8 из 8]" in body or status_id == "10048":
+                    self.state = STATE_COMPLETED
+                    self.processed_comment_ids.add(cid)
+                    is_success = "УСПЕШНО" in body or status_id == "10048"
+                    summary_text = "Все автотесты успешно пройдены в GitHub Actions." if is_success else "Зафиксированы ошибки в ходе тестирования."
+                    logger.info(f"[{self.issue_key}] 📱 Telegram: Итоговый отчет о завершении")
+                    notify_pipeline_completed(self.issue_key, success=is_success, summary=summary_text)
+                    continue
 
-        if ("(x)" in b or "ТРЕБОВАНИЯ НЕ ПРИНЯТЫ" in b or "ОШИБКА" in b) and (issue_key, c.get("id")) not in notified_events:
-            notify_error(issue_key, "Jira Comment Event", b.splitlines()[0][:200])
-            notified_events.add((issue_key, c.get("id")))
+            # Алерты об ошибках
+            if ("(x)" in body or "ТРЕБОВАНИЯ НЕ ПРИНЯТЫ" in body or "ОШИБКА" in body) and cid not in self.processed_comment_ids:
+                self.processed_comment_ids.add(cid)
+                notify_error(self.issue_key, "Jira Event", body.splitlines()[0][:200])
 
-    if status_id == "10048" and (issue_key, "STAGE8") not in notified_events:
-        notify_pipeline_completed(issue_key, success=True, summary="Задача успешно переведена в статус «Автотесты пройдены».")
-        notified_events.add((issue_key, "STAGE8"))
+    def mark_ci_running(self, branch: str):
+        if self.state in (STATE_GATE2_WAITING, STATE_GATE2_APPROVED):
+            self.state = STATE_CI_RUNNING
+            try:
+                from scripts.telegram_notifier import notify_cicd_started
+                notify_cicd_started(self.issue_key, branch=branch)
+            except Exception as e:
+                logger.error(f"Telegram notify error: {e}")
+
+trackers: dict = {}
+
 
 
 def get_latest_execution_id(comments: list):
@@ -231,9 +268,9 @@ def daemon_loop():
                 fields = issue.get("fields", {})
                 status_id = fields.get("status", {}).get("id")
 
-                # Live Telegram notifications for all pipeline stages and Quality Gates
+                tracker = trackers.setdefault(issue_key, PipelineTracker(issue_key))
                 try:
-                    process_telegram_alerts(issue)
+                    tracker.step(issue)
                 except Exception as te:
                     logger.warning(f"Ошибка при обработке Telegram-оповещений для {issue_key}: {te}")
 
@@ -318,6 +355,7 @@ def daemon_loop():
                             continue
 
                         logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий через Worktree!")
+                        tracker.mark_ci_running(branch_name)
                         from scripts.hitl_review_gate import add_jira_label
                         add_jira_label(issue_key, "qa-autotests-created")
                         logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
@@ -338,9 +376,20 @@ def daemon_loop():
                             notify_error(issue_key, "Daemon Execution", str(ex))
                         except Exception:
                             pass
+
+            # Отслеживание задач в ожидании CI/CD для фиксации перехода в «Автотесты пройдены»
+            for key, t in list(trackers.items()):
+                if t.state in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
+                    try:
+                        r = requests.get(f"{JIRA_URL}/rest/api/2/issue/{key}", auth=(JIRA_EMAIL, JIRA_TOKEN), timeout=10)
+                        if r.ok:
+                            t.step(r.json())
+                    except Exception:
+                        pass
                             
         except Exception as e:
             logger.error(f"Глобальная ошибка в цикле поллинга Jira: {e}", exc_info=True)
+
             
         time.sleep(10)
 
