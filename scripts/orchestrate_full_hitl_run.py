@@ -67,6 +67,12 @@ if review_dir.exists():
     for f in review_dir.rglob("*.py"):
         f.unlink()
 
+# Очистка изолированного worktree если осталось
+wt_dir = BASE_DIR / ".worktrees" / f"qa-{ISSUE_KEY.lower()}"
+if wt_dir.exists():
+    import subprocess
+    subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
+
 print(" • Пауза 5 секунд для стабилизации состояния...")
 time.sleep(5)
 
@@ -79,20 +85,23 @@ print(" • Задача переведена в «В работе». Запус
 
 requests.post(f"{N8N_URL}/webhook/jira-dor-gate", json={"issueKey": ISSUE_KEY, "actor": "Roman Timoshenko"})
 
-print(" • Ожидание формирования этапов 1–5 (30 секунд)...")
-time.sleep(30)
+print(" • Ожидание формирования этапов 1–5 и карточки Gate 1...")
+gate1_card = None
+for _ in range(20):
+    time.sleep(3)
+    r_comm = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
+    comms = r_comm.get("comments", [])
+    gate1_card = next((c for c in comms if "[Этап 5 из 7]" in c["body"]), None)
+    if gate1_card:
+        break
 
-r_comm = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
-comms = r_comm.get("comments", [])
-print(f"📊 Текущее количество комментариев: {len(comms)}")
+if not gate1_card:
+    print("❌ ОШИБКА: Карточка Gate 1 не обнаружена за отведенное время!")
+    sys.exit(1)
+
+print(f"✅ Карточка Gate 1 успешно сформирована! (Всего комментариев: {len(comms)})")
 for i, c in enumerate(comms):
     print(f"   [{i+1}] ID: {c['id']} | {c['body'].strip().splitlines()[0]}")
-
-gate1_card = next((c for c in comms if "[Этап 5 из 7]" in c["body"]), None)
-if not gate1_card:
-    print("❌ ОШИБКА: Карточка Gate 1 не обнаружена!")
-    sys.exit(1)
-print("✅ Карточка Gate 1 успешно сформирована и ожидает согласования.")
 
 # -----------------------------------------------------------------------------
 # ЭТАП 2: СОГЛАСОВАНИЕ GATE 1 (ОТМЕТКА С СЕРДЕЧКОМ ❤️)
@@ -105,20 +114,23 @@ print(f" • Опубликован комментарий согласован�
 print(" • Запуск пайплайна для обработки Gate 1...")
 requests.post(f"{N8N_URL}/webhook/jira-dor-gate", json={"issueKey": ISSUE_KEY, "actor": "Roman Timoshenko"})
 
-print(" • Ожидание создания кейсов в Qase TMS, генерации тестов и AI-аудита Gate 2 (35 секунд)...")
-time.sleep(35)
+print(" • Ожидание создания кейсов в Qase TMS, генерации тестов и AI-аудита Gate 2...")
+gate2_card = None
+for _ in range(25):
+    time.sleep(3)
+    r_comm2 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
+    comms2 = r_comm2.get("comments", [])
+    gate2_card = next((c for c in comms2 if "[Этап 6 из 7]" in c["body"]), None)
+    if gate2_card:
+        break
 
-r_comm2 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
-comms2 = r_comm2.get("comments", [])
-print(f"\n📊 Комментариев после согласования Gate 1: {len(comms2)}")
-for i, c in enumerate(comms2):
-    print(f"   [{i+1}] ID: {c['id']} | {c['body'].strip().splitlines()[0]}")
-
-gate2_card = next((c for c in comms2 if "[Этап 6 из 7]" in c["body"]), None)
 if not gate2_card:
     print("❌ ОШИБКА: Карточка Gate 2 не найдена!")
     sys.exit(1)
-print("✅ Карточка Gate 2 успешно создана! Пайплайн остановился на остановке Quality Gate 2.")
+
+print(f"✅ Карточка Gate 2 успешно создана! (Всего комментариев: {len(comms2)})")
+for i, c in enumerate(comms2):
+    print(f"   [{i+1}] ID: {c['id']} | {c['body'].strip().splitlines()[0]}")
 
 # -----------------------------------------------------------------------------
 # ЭТАП 3: СОГЛАСОВАНИЕ GATE 2 (ВТОРАЯ ОТМЕТКА С СЕРДЕЧКОМ ❤️)
@@ -131,20 +143,23 @@ print(f" • Опубликован комментарий согласован�
 print(" • Запуск пайплайна для обработки Gate 2...")
 requests.post(f"{N8N_URL}/webhook/jira-dor-gate", json={"issueKey": ISSUE_KEY, "actor": "Roman Timoshenko"})
 
-print(" • Ожидание переноса файлов и публикации Этапа 7 (20 секунд)...")
-time.sleep(20)
+print(" • Ожидание переноса файлов и публикации Этапа 7...")
+stage7_card = None
+for _ in range(20):
+    time.sleep(3)
+    r_comm3 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
+    comms3 = r_comm3.get("comments", [])
+    stage7_card = next((c for c in comms3 if "[Этап 7 из 7]" in c["body"]), None)
+    if stage7_card:
+        break
 
-r_comm3 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
-comms3 = r_comm3.get("comments", [])
-print(f"\n📊 Комментариев после согласования Gate 2: {len(comms3)}")
-for i, c in enumerate(comms3):
-    print(f"   [{i+1}] ID: {c['id']} | {c['body'].strip().splitlines()[0]}")
-
-stage7_card = next((c for c in comms3 if "[Этап 7 из 7]" in c["body"]), None)
 if not stage7_card:
     print("❌ ОШИБКА: Карточка Этапа 7 не найдена!")
     sys.exit(1)
-print("✅ Этап 7 успешно опубликован в Jira!")
+
+print(f"✅ Этап 7 успешно опубликован в Jira! (Всего комментариев: {len(comms3)})")
+for i, c in enumerate(comms3):
+    print(f"   [{i+1}] ID: {c['id']} | {c['body'].strip().splitlines()[0]}")
 
 # -----------------------------------------------------------------------------
 # ЭТАП 4: ОЖИДАНИЕ ОБРАБОТКИ ДЕМОНОМ, ПУША В GIT И CI/CD (ЭТАП 8)
@@ -152,8 +167,7 @@ print("✅ Этап 7 успешно опубликован в Jira!")
 print("\n[ШАГ 4] Ожидание перехвата задачи демоном qa_agent_daemon и прогона GitHub Actions...")
 print("Демон закоммитит и запушит ветку qa/js-17, запустится GitHub Actions Allure прогон.")
 
-for attempt in range(1, 25):
-    print(f" • Проверка статуса в Jira (попытка {attempt}/24, ожидание 10 сек)...")
+for attempt in range(1, 45):
     time.sleep(10)
     issue_info = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}", auth=auth).json()
     curr_status = issue_info["fields"]["status"]["name"]
@@ -161,10 +175,10 @@ for attempt in range(1, 25):
     curr_comments = issue_info["fields"]["comment"]["comments"]
     has_stage8 = any("[Этап 8 из 8]" in c["body"] for c in curr_comments)
 
-    print(f"   Статус задачи: {curr_status} (ID {curr_status_id}) | Этап 8 опубликован: {has_stage8}")
+    print(f" • [{attempt}/45] Статус: {curr_status} (ID {curr_status_id}) | Комментариев: {len(curr_comments)} | Этап 8: {has_stage8}")
     if has_stage8 or curr_status_id == "10048":
         print("\n🎉 ПОЛНЫЙ СКВОЗНОЙ ЦИКЛ УСПЕШНО ЗАВЕРШЕН!")
-        print(f"Текущий статус задачи: {curr_status}")
+        print(f"Финальный статус задачи: {curr_status} (ID {curr_status_id})")
         break
 
 print("=" * 80)
