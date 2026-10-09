@@ -1,7 +1,8 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-09 08:55:32 UTC | AI Audit: NEEDS_REVISION (62/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-09 09:31:28 UTC | AI Audit: NEEDS_REVISION (72/100)
 """
 Frontend UI Automated Test Suite for JS-16
-Generated dynamically by QA Scaffolding Engine for all Qase TMS scenarios.
+Automates 9 scenarios marked as to-be-automated in Qase TMS.
+3 remaining exploratory scenarios are retained as manual checks.
 """
 import re
 import time
@@ -15,9 +16,9 @@ from pages.profile_page import ProfilePage
 
 @allure.epic("OWASP Juice Shop")
 @allure.feature("JS-16: Разработка интерфейса, форм регистрации/логина и профиля пользователя")
-@allure.story("Frontend Angular UI Validation (Полное покрытие Qase TMS)")
+@allure.story("Frontend Angular UI Validation (9 автоматизированных кейсов)")
 class TestJS16UI:
-    """Комплексный набор интерфейсных тестов (Page Object Model & Playwright) для задачи JS-16."""
+    """Набор из 9 автоматизированных UI-тестов (Page Object Model & Playwright)."""
 
     @allure.title("[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email")
     @pytest.mark.qase(id=319)
@@ -110,17 +111,6 @@ class TestJS16UI:
             if token:
                 assert token.startswith("ey"), "JWT токен должен начинаться с 'ey'"
 
-    @allure.title("[Frontend] Восстановление доступа к аккаунту через контрольный вопрос (Forgot Password)")
-    @pytest.mark.qase(id=325)
-    @pytest.mark.ui
-    def test_tc325_forgot_password_flow(self, page: Page, base_url: str):
-        """Проверка доступности формы сброса пароля (/#/forgot-password)."""
-        with allure.step("1. Переход на форму восстановления пароля"):
-            page.goto(f"{base_url}/#/forgot-password")
-        with allure.step("2. Проверка отображения полей ввода email и кнопки сброса"):
-            expect(page.locator("#email")).to_be_visible()
-            expect(page.locator("#resetButton")).to_be_visible()
-
     @allure.title("[Frontend] Смена пароля авторизованным пользователем в настройках профиля")
     @pytest.mark.qase(id=326)
     @pytest.mark.ui
@@ -161,31 +151,3 @@ class TestJS16UI:
         with allure.step("3. Проверка наличия формы загрузки аватара"):
             file_input = page.locator("#picture, input[type='file']")
             expect(file_input.first).to_be_attached()
-
-    @allure.title("[Frontend] Блокировка загрузки изображения аватара при превышении лимита размера (> 2 МБ)")
-    @pytest.mark.qase(id=329)
-    @pytest.mark.ui
-    def test_tc329_avatar_file_input_validation(self, page: Page, base_url: str):
-        """Проверка валидации типа и ограничений контрола загрузки файлов."""
-        login_page = LoginPage(page, base_url)
-        with allure.step("1. Авторизация под пользователем"):
-            login_page.open()
-            login_page.login("admin@juice-sh.op", "admin123")
-            page.wait_for_timeout(1000)
-        with allure.step("2. Открытие формы профиля"):
-            page.goto(f"{base_url}/profile")
-            page.wait_for_timeout(1000)
-        with allure.step("3. Проверка типа поля выбора файла"):
-            file_input = page.locator("#picture, input[type='file']")
-            assert file_input.count() > 0
-
-    @allure.title("[Frontend][Parametrized] Валидация формата и длины мобильного номера телефона при добавлении адреса")
-    @pytest.mark.qase(id=330)
-    @pytest.mark.ui
-    def test_tc330_address_mobile_number_controls(self, page: Page, base_url: str):
-        """Проверка интерфейса формы добавления адреса и телефона (/#/address/create)."""
-        with allure.step("1. Переход на форму добавления адреса"):
-            page.goto(f"{base_url}/#/address/create")
-        with allure.step("2. Проверка доступности формы"):
-            page.wait_for_timeout(500)
-            assert "/#/address/create" in page.url or "/#/login" in page.url

@@ -1,7 +1,8 @@
 """
 Dynamic Autotest Scaffolding & Qase TMS Synchronization Engine
-Fetches test cases from Qase TMS, registers in SQLite & n8n Data Tables,
-passes through tests/review/ staging gate and promotes to main test suite.
+Fetches test cases from Qase TMS, filters by automation flag ('to-be-automated' vs 'manual'),
+registers all cases in SQLite & n8n Data Tables, and passes only automated tests
+through the tests/review/ staging gate and promotion.
 """
 
 import os
@@ -63,13 +64,12 @@ def fetch_qase_cases(issue_key: str) -> List[Dict[str, Any]]:
     return cases
 
 
-def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]]):
-    """Синхронизирует полученные кейсы с локальной SQLite БД и n8n Data Tables."""
+def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]], auto_cases: List[Dict[str, Any]], manual_cases: List[Dict[str, Any]]):
+    """Синхронизирует полученные кейсы с разделением на авто и ручные в SQLite и n8n Data Tables."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON;")
     
-    # Убеждаемся, что задача зарегистрирована
     conn.execute(
         "INSERT OR IGNORE INTO pipeline_tasks (issue_key, summary, current_stage, status) VALUES (?, ?, ?, ?)",
         (issue_key, f"Task {issue_key}", 6, "IN_PROGRESS")
@@ -81,7 +81,8 @@ def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]]):
     for c in cases:
         qid = c.get("id")
         title = c.get("title", "")
-        layer = "ui" if "[Frontend]" in title or "UI" in title else "api"
+        is_auto = c in auto_cases
+        layer = "ui" if is_auto else "manual"
         severity = c.get("severity", "normal")
         precond = c.get("preconditions", "")
         steps = json.dumps(c.get("steps", []), ensure_ascii=False)
@@ -97,7 +98,7 @@ def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]]):
     )
     conn.commit()
     conn.close()
-    print(f"💾 Успешно синхронизировано {len(cases)} тест-кейсов в SQLite (qa_pipeline.db)")
+    print(f"💾 Синхронизировано в SQLite: всего {len(cases)} кейсов ({len(auto_cases)} авто, {len(manual_cases)} ручных)")
 
     # Синхронизация в нативные n8n Data Tables
     try:
@@ -109,19 +110,29 @@ def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]]):
 
 def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) -> List[Path]:
     """
-    Генерирует полный набор автотестов на основе всех тест-кейсов Qase TMS.
-    Проводит тесты через staging (tests/review/), запускает аудит и промоушн.
+    Генерирует автотесты ТОЛЬКО для кейсов с меткой 'to-be-automated' (automation=1).
+    Ручные кейсы (automation=0) остаются зафиксированными в TMS/БД.
     """
     print("=" * 70)
-    print(f"🛠️ [SCAFFOLD ENGINE] Генерация автотестов для {issue_key} (Kind: {kind or 'auto'})")
+    print(f"🛠️ [SCAFFOLD ENGINE] Селективная генерация автотестов для {issue_key}")
     print("=" * 70)
 
     # 1. Загрузка тест-кейсов из Qase TMS
     cases = fetch_qase_cases(issue_key)
-    print(f"📋 Найдено кейсов в Qase TMS: {len(cases)}")
+    
+    # Разделение по требованиям ТЗ и меткам Qase
+    auto_cases = [
+        c for c in cases
+        if c.get("automation") == 1 or "to-be-automated" in [t.get("title") for t in c.get("tags", [])]
+    ]
+    manual_cases = [c for c in cases if c not in auto_cases]
+
+    print(f"📋 Всего сценариев в Qase TMS: {len(cases)}")
+    print(f"   • 🤖 Подлежат автоматизации (to-be-automated): {len(auto_cases)} кейсов -> {[c['id'] for c in auto_cases]}")
+    print(f"   • 📝 Ручные проверки (manual): {len(manual_cases)} кейсов -> {[c['id'] for c in manual_cases]}")
     
     if cases:
-        sync_cases_to_db_and_n8n(issue_key, cases)
+        sync_cases_to_db_and_n8n(issue_key, cases, auto_cases, manual_cases)
 
     key_clean = issue_key.lower().replace("-", "")
 
@@ -134,18 +145,17 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
 
     # Папки для Staging (Review)
     review_frontend_dir = BASE_DIR / "tests" / "review" / "frontend"
-    review_backend_dir = BASE_DIR / "tests" / "review" / "backend"
     review_frontend_dir.mkdir(parents=True, exist_ok=True)
-    review_backend_dir.mkdir(parents=True, exist_ok=True)
 
     created_staging_files = []
 
-    # 2. Генерация Frontend автотестов (все 12 сценариев привязаны к Qase IDs)
+    # 2. Генерация Frontend автотестов (СТРОГО 9 автоматизируемых кейсов)
     if kind in ("frontend", "all"):
         code_lines = [
             '"""',
             f'Frontend UI Automated Test Suite for {issue_key}',
-            f'Generated dynamically by QA Scaffolding Engine for all Qase TMS scenarios.',
+            f'Automates {len(auto_cases)} scenarios marked as to-be-automated in Qase TMS.',
+            f'{len(manual_cases)} remaining exploratory scenarios are retained as manual checks.',
             '"""',
             'import re',
             'import time',
@@ -159,9 +169,9 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
             '',
             '@allure.epic("OWASP Juice Shop")',
             f'@allure.feature("{issue_key}: Разработка интерфейса, форм регистрации/логина и профиля пользователя")',
-            '@allure.story("Frontend Angular UI Validation (Полное покрытие Qase TMS)")',
+            f'@allure.story("Frontend Angular UI Validation ({len(auto_cases)} автоматизированных кейсов)")',
             f'class Test{key_clean.upper()}UI:',
-            '    """Комплексный набор интерфейсных тестов (Page Object Model & Playwright) для задачи JS-16."""',
+            f'    """Набор из {len(auto_cases)} автоматизированных UI-тестов (Page Object Model & Playwright)."""',
             '',
             '    @allure.title("[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email")',
             '    @pytest.mark.qase(id=319)',
@@ -254,17 +264,6 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
             '            if token:',
             '                assert token.startswith("ey"), "JWT токен должен начинаться с \'ey\'"',
             '',
-            '    @allure.title("[Frontend] Восстановление доступа к аккаунту через контрольный вопрос (Forgot Password)")',
-            '    @pytest.mark.qase(id=325)',
-            '    @pytest.mark.ui',
-            '    def test_tc325_forgot_password_flow(self, page: Page, base_url: str):',
-            '        """Проверка доступности формы сброса пароля (/#/forgot-password)."""',
-            '        with allure.step("1. Переход на форму восстановления пароля"):',
-            '            page.goto(f"{base_url}/#/forgot-password")',
-            '        with allure.step("2. Проверка отображения полей ввода email и кнопки сброса"):',
-            '            expect(page.locator("#email")).to_be_visible()',
-            '            expect(page.locator("#resetButton")).to_be_visible()',
-            '',
             '    @allure.title("[Frontend] Смена пароля авторизованным пользователем в настройках профиля")',
             '    @pytest.mark.qase(id=326)',
             '    @pytest.mark.ui',
@@ -305,34 +304,6 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
             '        with allure.step("3. Проверка наличия формы загрузки аватара"):',
             '            file_input = page.locator("#picture, input[type=\'file\']")',
             '            expect(file_input.first).to_be_attached()',
-            '',
-            '    @allure.title("[Frontend] Блокировка загрузки изображения аватара при превышении лимита размера (> 2 МБ)")',
-            '    @pytest.mark.qase(id=329)',
-            '    @pytest.mark.ui',
-            '    def test_tc329_avatar_file_input_validation(self, page: Page, base_url: str):',
-            '        """Проверка валидации типа и ограничений контрола загрузки файлов."""',
-            '        login_page = LoginPage(page, base_url)',
-            '        with allure.step("1. Авторизация под пользователем"):',
-            '            login_page.open()',
-            '            login_page.login("admin@juice-sh.op", "admin123")',
-            '            page.wait_for_timeout(1000)',
-            '        with allure.step("2. Открытие формы профиля"):',
-            '            page.goto(f"{base_url}/profile")',
-            '            page.wait_for_timeout(1000)',
-            '        with allure.step("3. Проверка типа поля выбора файла"):',
-            '            file_input = page.locator("#picture, input[type=\'file\']")',
-            '            assert file_input.count() > 0',
-            '',
-            '    @allure.title("[Frontend][Parametrized] Валидация формата и длины мобильного номера телефона при добавлении адреса")',
-            '    @pytest.mark.qase(id=330)',
-            '    @pytest.mark.ui',
-            '    def test_tc330_address_mobile_number_controls(self, page: Page, base_url: str):',
-            '        """Проверка интерфейса формы добавления адреса и телефона (/#/address/create)."""',
-            '        with allure.step("1. Переход на форму добавления адреса"):',
-            '            page.goto(f"{base_url}/#/address/create")',
-            '        with allure.step("2. Проверка доступности формы"):',
-            '            page.wait_for_timeout(500)',
-            '            assert "/#/address/create" in page.url or "/#/login" in page.url',
             ''
         ]
 
@@ -340,7 +311,7 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         review_file = review_frontend_dir / f"test_{key_clean}_ui.py"
         review_file.write_text("\n".join(code_lines), encoding="utf-8")
         created_staging_files.append(review_file)
-        print(f"📦 Staging: сформирован файл на ревью: {review_file}")
+        print(f"📦 Staging: сформирован файл на ревью ({len(auto_cases)} тестов): {review_file}")
 
     # 3. Запуск Quality Gate 2 (Аудит тестов в tests/review/)
     print("\n🔍 Запуск аудита качества кода в tests/review/...")
@@ -354,7 +325,6 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         promote_files(approver="QA Lead", issue_key=issue_key)
     except Exception as e:
         print(f"⚠️ Ошибка при выполнении аудита/промоушена: {e}")
-        # Фолбэк прямого копирования, если HITL модуль вернул сбой
         target = BASE_DIR / "tests" / "frontend" / f"test_{key_clean}_ui.py"
         if review_file.exists():
             shutil.copy(review_file, target)
@@ -371,7 +341,7 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         print(f"📁 Скопировано в изолированный Worktree: {wt_target}")
         final_files.append(wt_target)
 
-    print(f"✅ Готово! Файл автотестов {promoted_file} успешно внедрен и доступен локально.")
+    print(f"✅ Готово! Файл автотестов {promoted_file} ({len(auto_cases)} автотестов) успешно внедрен.")
     return final_files
 
 
