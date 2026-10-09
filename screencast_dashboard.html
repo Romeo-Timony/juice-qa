@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>QA Automation Pipeline Screencast & Architecture Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --heading: #f0f6fc;
+      --accent: #58a6ff;
+      --success: #238636;
+      --success-glow: #2ea043;
+      --warning: #d29922;
+      --purple: #bc8cff;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      padding: 30px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      color: var(--heading);
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      background: rgba(35, 134, 54, 0.2);
+      color: #3fb950;
+      border: 1px solid rgba(46, 160, 67, 0.4);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge.manual {
+      background: rgba(210, 153, 34, 0.15);
+      color: #d29922;
+      border-color: rgba(210, 153, 34, 0.4);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 25px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 22px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .card-title {
+      font-size: 18px;
+      color: var(--heading);
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+      padding-bottom: 10px;
+    }
+    .node-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .node-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0d1117;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .node-item.success {
+      border-left: 4px solid var(--success-glow);
+    }
+    .node-item .name {
+      color: var(--heading);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .node-item .time {
+      color: #8b949e;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    .terminal {
+      background: #010409;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 14px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      color: #7ee787;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+    .terminal .dim { color: #8b949e; }
+    .terminal .hl { color: #58a6ff; font-weight: bold; }
+    .terminal .success-text { color: #3fb950; font-weight: bold; }
+    .tree {
+      font-family: var(--font);
+      font-size: 13px;
+    }
+    .tree-folder {
+      color: #f0883e;
+      font-weight: 600;
+      margin: 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tree-subfolder {
+      margin-left: 20px;
+      color: var(--accent);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tree-case {
+      margin-left: 42px;
+      color: #8b949e;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tree-case strong {
+      color: var(--heading);
+    }
+    .tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #21262d;
+      color: #8b949e;
+      border: 1px solid #30363d;
+    }
+    .tag.auto { background: rgba(56, 139, 253, 0.15); color: #58a6ff; border-color: rgba(56, 139, 253, 0.4); }
+    .tag.green { background: rgba(35, 134, 54, 0.15); color: #3fb950; border-color: rgba(46, 160, 67, 0.4); }
+    .tag.manual { background: rgba(210, 153, 34, 0.15); color: #d29922; border-color: rgba(210, 153, 34, 0.4); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>🚀 OWASP Juice Shop: QA Automation Pipeline Dashboard</h1>
+      <p style="color: #8b949e; margin-top: 5px;">Сквозной срез: Jira Cloud ➔ ngrok HTTPS ➔ n8n ➔ Qase TMS (9 Авто / 3 Ручных) ➔ tests/review/ Staging ➔ GitHub Actions</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <span class="badge">🤖 Автотесты: 9 / 9 PASSED (100%)</span>
+      <span class="badge manual">📝 Ручные кейсы: 3 (в Qase TMS)</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- СЛОЙ 1: n8n Workflow & Data Tables -->
+    <div class="card">
+      <div class="card-title">
+        <span>⚡ Слой 1: n8n Workflow & Data Tables</span>
+        <span class="tag auto">Синхронизировано</span>
+      </div>
+      <div class="node-flow">
+        <div class="node-item success">
+          <span class="name">🌐 Jira Webhook (ngrok HTTPS Tunnel)</span>
+          <span class="time">Instant Push [200 OK]</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">📋 [Этап 1] QA-валидация требований (DoR Gate)</span>
+          <span class="time">Score: 95/100 [Passed]</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">🧠 [Этап 2] Интеллект-карта проверок (QA MindMap)</span>
+          <span class="time">7 Ветвей покрытия</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">🗂️ [Этапы 3-4] Qase Suite: Root 'Frontend' (37) ➔ Child 'JS-16' (38)</span>
+          <span class="time">12 Кейсов в сьюте</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">🛡️ [Этап 5] Quality Gate 1: Разделение Авто/Ручные</span>
+          <span class="time">9 to-be-automated | 3 manual</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">📊 [БД] Синхронизация n8n Data Tables (/tables)</span>
+          <span class="time">24 кейса | 10 стадий | 1 задача</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">📦 [Этап 6] Staging в tests/review/ ➔ AI-Аудит (Gemini)</span>
+          <span class="time">Score: 72/100 [Approved]</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">🚀 [Этап 7] Promotion: 9 автотестов в tests/frontend/ & Очистка review/</span>
+          <span class="time">POM Playwright</span>
+        </div>
+        <div class="node-item success">
+          <span class="name">📊 [Этап 8] Webhook: Allure отчет из GitHub Actions</span>
+          <span class="time">9 passed in 29.15s (100%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- СЛОЙ 2: Qase TMS Hierarchy (9 Авто / 3 Ручных) -->
+    <div class="card">
+      <div class="card-title">
+        <span>🗂️ Слой 2: Qase TMS (9 Автоматизируемых + 3 Ручных по ТЗ)</span>
+        <span class="tag auto">Suite #38</span>
+      </div>
+      <div class="tree">
+        <div class="tree-folder">📂 Root Suite: Frontend <span class="tag green">ID: 37</span></div>
+        <div class="tree-subfolder">📁 Child Suite: JS-16: [Frontend] ТЗ: Разработка интерфейса, форм регистрации/логина и профиля <span class="tag green">ID: 38</span></div>
+        
+        <div class="tree-case">📄 JS-319: [Frontend][Parametrized] Успешная регистрация нового пользователя <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-320: [Frontend][Parametrized] Граничные значения длины пароля (BVA) <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-321: [Frontend] Несовпадение пароля и подтверждения пароля <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-322: [Frontend] Обработка ошибки 409 Conflict при регистрации <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-323: [Frontend][Parametrized] Аутентификация пользователя и токен <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-324: [Frontend] Bearer JWT в сессии и JwtInterceptor <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-325: [Frontend] Восстановление доступа через контрольный вопрос <span class="tag manual">manual (0)</span></div>
+        <div class="tree-case">📄 JS-326: [Frontend] Смена пароля авторизованным пользователем <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-327: [Frontend] Блокировка смены пароля при неверном пароле (401) <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-328: [Frontend] Загрузка изображения аватара профиля (PNG/JPEG) <span class="tag green">to-be-automated (1)</span></div>
+        <div class="tree-case">📄 JS-329: [Frontend] Блокировка загрузки аватара > 2 МБ <span class="tag manual">manual (0)</span></div>
+        <div class="tree-case">📄 JS-330: [Frontend][Parametrized] Валидация формата мобильного номера <span class="tag manual">manual (0)</span></div>
+      </div>
+      <p style="margin-top: 15px; font-size: 12px; color: #3fb950;">✅ Строго по ТЗ: ровно 9 сценариев автоматизированы в коде, 3 исследовательских кейса остаются ручными.</p>
+    </div>
+
+    <!-- СЛОЙ 3: Staging & Review Gate -->
+    <div class="card">
+      <div class="card-title">
+        <span>🛡️ Слой 3: Staging & Quality Gate (tests/review/ ➔ tests/frontend/)</span>
+        <span class="tag green">HITL Promoted</span>
+      </div>
+      <div class="terminal">
+<span class="dim">[11:31:03] [INFO]</span> 🛠️ Селективная генерация автотестов для JS-16...
+<span class="dim">[11:31:04] [INFO]</span> 📋 Всего кейсов в Qase TMS: 12 (Авто: 9, Ручных: 3)
+<span class="dim">[11:31:05] [INFO]</span> 📦 Staging: сформирован файл на ревью: <span class="hl">tests/review/frontend/test_js16_ui.py</span>
+<span class="dim">[11:31:08] [INFO]</span> 🔍 [GATE 2: AUDIT] Запуск AST-инспектора и AI-аудитора (Gemini)...
+<span class="dim">[11:31:12] [INFO]</span> 📋 ВЕРДИКТ AI-АУДИТОРА: <span class="success-text">ОДОБРЕНО (72/100)</span>
+<span class="dim">[11:31:13] [INFO]</span> 📝 Сформирован отчет: <span class="hl">tests/review/REVIEW_REPORT.md</span>
+<span class="dim">[11:31:14] [INFO]</span> 🚀 [PROMOTION] Перенос 9 автотестов в боевую структуру проекта...
+<span class="success-text">[11:31:15] [INFO] ✅ Перенесен в боевые тесты: tests/frontend/test_js16_ui.py</span>
+<span class="success-text">[11:31:15] [INFO] 🗑️ Исходный файл в tests/review/ удален (Карантин очищен)</span>
+<span class="dim">[11:31:16] [INFO]</span> 💾 Обновлены SQLite (qa_pipeline.db) и n8n Data Tables (/tables)
+<span class="dim">[11:31:17] [INFO]</span> 📢 Опубликован комментарий в Jira: "[Этап 7 из 7] Автотесты внедрены"
+<span class="success-text">[11:31:18] [INFO] ✅ Локальный файл tests/frontend/test_js16_ui.py доступен в IDE!</span>
+      </div>
+    </div>
+
+    <!-- СЛОЙ 4: GitHub Actions CI/CD -->
+    <div class="card">
+      <div class="card-title">
+        <span>🐙 Слой 4: GitHub Actions Runner (Workflow Run #37917739760 - JS-17 & JS-16)</span>
+        <span class="tag green">21 / 21 Passed (100%)</span>
+      </div>
+      <div class="terminal">
+<span class="dim">[10:28:15Z]</span> <span class="success-text">✓ Initialize containers (bkimminich/juice-shop:v17.1.1)</span>
+<span class="dim">[10:28:20Z]</span> <span class="success-text">✓ Checkout code (Romeo-Timony/juice-qa@qa/js-17)</span>
+<span class="dim">[10:28:45Z]</span> <span class="success-text">✓ Install dependencies (pytest, playwright, allure-pytest, pydantic)</span>
+<span class="dim">[10:28:48Z]</span> <span class="success-text">✓ Wait for Juice Shop container (http://localhost:3000) -> Ready</span>
+<span class="dim">[10:28:50Z]</span> <span class="hl">✓ Run Backend API Tests (JS-17 REST API & Models):</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc331_register_user_success <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc332_register_duplicate_email_conflict <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc333_register_incomplete_payload <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc334_user_login_success_jwt <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc335_user_login_invalid_credentials <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc336_login_sql_injection <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc337_jwt_protected_endpoint <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc338_change_password_success <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc339_change_password_invalid_current <span class="success-text">PASSED</span>
+  tests/backend/test_tc340_reset_password_security_question <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc341_avatar_upload_mime_type <span class="success-text">PASSED</span>
+  tests/backend/test_js17_api.py::TestJS17API::test_tc342_create_address_validation <span class="success-text">PASSED</span>
+  <span class="success-text">====== 12 passed in 1.28s ======</span>
+<span class="dim">[10:28:55Z]</span> <span class="hl">✓ Run Frontend UI Tests (Playwright POM):</span>
+  tests/frontend/test_js16_ui.py (9 passed)
+  <span class="success-text">====== 9 passed in 31.23s ======</span>
+<span class="dim">[10:29:30Z]</span> <span class="success-text">✓ Send Report to n8n Webhook:</span>
+  POST https://stylish-mary-bluebelled.ngrok-free.dev/webhook/github-actions-report
+  Payload: { issueKey: "JS-17", status: "success", allureSummary: "Backend: 12 passed in 1.28s; Frontend: 9 passed in 31.23s" }
+  Response: HTTP 200 {"message": "Workflow was started"}
+<span class="dim">[10:29:32Z]</span> <span class="success-text">✓ Upload Allure Results as Artifact (104.2 KB)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- СЛОЙ 5: Jira Comments Summary -->
+  <div class="card" style="margin-top: 25px;">
+    <div class="card-title">
+      <span>📋 Слой 5: История этапов в Jira Cloud (Задача JS-16)</span>
+      <span class="tag auto">8 / 8 Этапов Завершено</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; font-size: 13px;">
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 1: DoR Gate</strong><br>
+        <span style="color: #3fb950;">(/) ТРЕБОВАНИЯ ПРИНЯТЫ</span><br>
+        Оценка: 95/100 (10 правил)
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 2: MindMap</strong><br>
+        <span style="color: #3fb950;">(/) КАРТА СОЗДАНА</span><br>
+        7 узлов декомпозиции UI
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 3: BDD Реестр</strong><br>
+        <span style="color: #3fb950;">(/) 12 КЕЙСОВ В TMS</span><br>
+        9 авто / 3 ручных
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 4: Матрица RTM</strong><br>
+        <span style="color: #3fb950;">(/) 100% ПОКРЫТИЕ</span><br>
+        Все критерии AC покрыты
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 5: Quality Gate 1</strong><br>
+        <span style="color: #3fb950;">(/) УТВЕРЖДЕНО</span><br>
+        Сценарии BDD согласованы
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 6: Quality Gate 2</strong><br>
+        <span style="color: #3fb950;">(/) AI-АУДИТ ПРОЙДЕН</span><br>
+        Review report: 72/100
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 7: Promotion</strong><br>
+        <span style="color: #3fb950;">(/) ВНЕДРЕНО В ПРОЕКТ</span><br>
+        9 автотестов (3 ручных в Qase)
+      </div>
+      <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">Этап 8: GitHub CI/CD</strong><br>
+        <span style="color: #3fb950;">(/) 100% УСПЕШНО</span><br>
+        Allure: 9 passed in 29.15s
+      </div>
+    </div>
+  </div>
+</body>
+</html>
