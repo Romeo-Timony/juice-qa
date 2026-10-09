@@ -29,7 +29,7 @@ QASE_URL = os.getenv("QASE_API_URL", "https://api.qase.io/v1")
 
 
 def fetch_qase_cases(issue_key: str) -> List[Dict[str, Any]]:
-    """Получает все тест-кейсы из Qase TMS для указанной задачи Jira."""
+    """Получает все тест-кейсы из Qase TMS для указанной задачи Jira с защитой от дублирования."""
     if not QASE_TOKEN:
         print("⚠️ QASE_API_TOKEN отсутствует в .env")
         return []
@@ -49,19 +49,40 @@ def fetch_qase_cases(issue_key: str) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"⚠️ Ошибка получения сьютов Qase: {e}")
 
-    # 2. Получение тест-кейсов сьюта (или всех кейсов проекта)
+    # 2. Получение тест-кейсов сьюта (или всех кейсов проекта) с полной пагинацией
     cases = []
     try:
-        url = f"{QASE_URL}/case/{QASE_PROJECT}?limit=100"
-        if suite_id:
-            url += f"&suite_id={suite_id}"
-        res = requests.get(url, headers=headers, timeout=15)
-        if res.ok:
-            cases = res.json().get("result", {}).get("entities", [])
+        offset = 0
+        while True:
+            url = f"{QASE_URL}/case/{QASE_PROJECT}?limit=100&offset={offset}"
+            if suite_id:
+                url += f"&suite_id={suite_id}"
+            res = requests.get(url, headers=headers, timeout=15)
+            if not res.ok:
+                break
+            data = res.json().get("result", {})
+            entities = data.get("entities", [])
+            if not entities:
+                break
+            cases.extend(entities)
+            offset += len(entities)
+            if offset >= (data.get("total", 0)):
+                break
     except Exception as e:
         print(f"⚠️ Ошибка получения кейсов Qase: {e}")
 
-    return cases
+    # 3. Фильтрация дубликатов по заголовкам
+    unique_cases = []
+    seen_titles = set()
+    for c in cases:
+        norm_t = c.get("title", "").strip().lower()
+        if norm_t not in seen_titles:
+            seen_titles.add(norm_t)
+            unique_cases.append(c)
+        else:
+            print(f"⚠️ Пропущен дубликат в выборке Qase: #{c.get('id')} «{c.get('title')}»")
+
+    return unique_cases
 
 
 def sync_cases_to_db_and_n8n(issue_key: str, cases: List[Dict[str, Any]], auto_cases: List[Dict[str, Any]], manual_cases: List[Dict[str, Any]]):

@@ -356,7 +356,32 @@
       <div style="background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
         <strong style="color: #58a6ff;">Этап 8: GitHub CI/CD</strong><br>
         <span style="color: #3fb950;">(/) 100% УСПЕШНО</span><br>
-        Allure: 9 passed in 29.15s
+        Allure: 21 passed (Backend & UI)
+      </div>
+    </div>
+  </div>
+
+  <!-- СЛОЙ 6: Архитектурные оптимизации QA Lead -->
+  <div class="card" style="margin-top: 25px; border: 1px solid #238636;">
+    <div class="card-title">
+      <span>🛡️ Архитектурные оптимизации QA Lead (Дедупликация, Анти-спам и Статусная модель)</span>
+      <span class="tag green">Внедрено и активно</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 13px;">
+      <div style="background: #0d1117; padding: 14px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">1. Дедупликация Qase TMS</strong><br><br>
+        <span style="color: #3fb950;">✓ Логическая и сигнатурная оценка</span><br>
+        База Qase защищена от дубликатов: перед созданием кейсов скрипт <code>qase_deduplicate_evaluator.py</code> проверяет эндпоинты, HTTP-методы, intent и UI-модули. Удалены 12 паразитных дублей, в TMS ровно 24 уникальных кейса.
+      </div>
+      <div style="background: #0d1117; padding: 14px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">2. Анти-спам Stage 8 в Jira</strong><br><br>
+        <span style="color: #3fb950;">✓ Single Source of Truth</span><br>
+        В n8n внедрен узел дедупликации комментариев: при повторных сбоях тестов старый комментарий обновляется через <code>PUT</code> с таймстемпом последней попытки, не засоряя ленту задачи. При успехе публикуется единый финальный отчет.
+      </div>
+      <div style="background: #0d1117; padding: 14px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">3. Статус «Автотесты пройдены»</strong><br><br>
+        <span style="color: #3fb950;">✓ Авто-перевод (Transition 31)</span><br>
+        При ошибке автотестов задача блокируется в статусе <code>В работе</code> (10046). При успехе (100% passed) задача автоматически переводится в статус <code>Автотесты пройдены</code> (10048) для проведения ручного тестирования QA инженером.
       </div>
     </div>
   </div>
