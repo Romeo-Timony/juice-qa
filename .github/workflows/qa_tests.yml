@@ -54,10 +54,11 @@ jobs:
       id: backend_tests
       run: |
         set -o pipefail
-        if [ -d "tests/backend" ]; then
+        if compgen -G "tests/backend/test_*.py" > /dev/null; then
           pytest tests/backend/ --alluredir=allure-results 2>&1 | tee backend.log
         else
-          echo "Backend tests folder not found, skipping." | tee backend.log
+          echo "No backend tests to run, skipping." | tee backend.log
+          exit 0
         fi
 
     - name: Run Frontend UI Tests
@@ -65,10 +66,11 @@ jobs:
       id: frontend_tests
       run: |
         set -o pipefail
-        if [ -d "tests/frontend" ]; then
+        if compgen -G "tests/frontend/test_*.py" > /dev/null; then
           pytest tests/frontend/ --alluredir=allure-results 2>&1 | tee frontend.log
         else
-          echo "Frontend tests folder not found, skipping." | tee frontend.log
+          echo "No frontend tests to run, skipping." | tee frontend.log
+          exit 0
         fi
 
     - name: Get Issue Key from Branch
@@ -97,7 +99,7 @@ jobs:
 
         BACKEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' backend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)
         FRONTEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' frontend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)
-        SUMMARY="Backend: ${BACKEND_SUMMARY:-нет данных}; Frontend: ${FRONTEND_SUMMARY:-нет данных}"
+        SUMMARY="Backend: ${BACKEND_SUMMARY:-пропущено}; Frontend: ${FRONTEND_SUMMARY:-нет данных}"
 
         PAYLOAD=$(jq -n \
           --arg issueKey "$ISSUE_KEY" \

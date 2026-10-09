@@ -8,7 +8,7 @@ const WORKFLOW_NAME = 'Juice Shop'
 
 const code = file => fs.readFileSync(path.join(NODES_DIR, file), 'utf8')
 
-function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiModel, qaseCode = 'JS' }) {
+function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiModel, qaseCode = 'JS', qaseToken = '' }) {
   const jiraCreds = { jiraSoftwareCloudApi: jiraCred }
   const qaseCreds = { httpHeaderAuth: qaseCred }
   const FILTER = "$('Фильтр: Задача взята в работу').item.json"
@@ -318,7 +318,10 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
       position: [3120, 260],
       credentials: qaseCreds
     },
-    codeNode('Создание тест-кейсов без повторов', '08_format_testcases.js', [3340, 260]),
+    codeNode('Создание тест-кейсов без повторов', '08_format_testcases.js', [3340, 260], {
+      __QASE_TOKEN__: qaseToken,
+      __QASE_CODE__: qaseCode
+    }),
     jira('Jira: Отчет 3 — Реестр тест-кейсов (BDD)', 'POST', issueUrl('/comment'), [3560, 260], casesReportBody),
     jira('Jira: Отчет 4 — Матрица трассируемости (RTM)', 'POST', issueUrl('/comment'), [3780, 260], rtmCommentBody),
 

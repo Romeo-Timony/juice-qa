@@ -68,7 +68,8 @@ async function ensureCredential (key, envId, name, type, data) {
     qaseCred,
     webhookToken: state.webhookToken,
     geminiModel: GEMINI_MODEL,
-    qaseCode: cfg.QASE_PROJECT_CODE || 'JS'
+    qaseCode: cfg.QASE_PROJECT_CODE || 'JS',
+    qaseToken: cfg.QASE_API_TOKEN
   })
 
   console.log('\n--- Step 3: Deploying Workflow to n8n ---')

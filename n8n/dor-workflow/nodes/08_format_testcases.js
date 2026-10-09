@@ -24,41 +24,87 @@ for (const ec of existingCases) {
 }
 
 const f = issue.fields || {}
-const parentKey = f.parent?.key || ''
-const parentSummary = f.parent?.fields?.summary || ''
-
-// 1. Feature suite (папка фичи верхнего уровня)
-let featSuite = null
-if (parentKey) {
-  featSuite = suites.find(s => s.parent_id == null && s.title.includes(parentKey))
-}
-if (!featSuite && parentSummary) {
-  const norm = parentSummary.toLowerCase()
-  featSuite = suites.find(s => s.parent_id == null && norm.includes(s.title.toLowerCase().slice(0, 15)))
-}
-if (!featSuite) {
-  featSuite = suites.find(s => s.parent_id == null && s.title.includes(ctx.issueKey))
-}
-
 const kind = ctx.kind || 'generic'
 const isBackend = kind === 'backend'
-let expectedModName = 'Frontend'
-if (kind === 'backend') expectedModName = 'Backend'
-else if (kind === 'story') expectedModName = 'E2E / User Journey'
-else if (kind === 'task' || kind === 'generic') expectedModName = 'Technical Tasks'
 
-// 2. Module sub-suite
-let modSuite = null
-if (featSuite) {
-  modSuite = suites.find(s => s.parent_id === featSuite.id && s.title.toLowerCase() === expectedModName.toLowerCase())
-}
-if (!modSuite) {
-  modSuite = suites.find(s => s.title.toLowerCase() === expectedModName.toLowerCase())
+const qaseToken = '__QASE_TOKEN__'
+const qaseCode = '__QASE_CODE__'
+
+// Helper to create suites in Qase TMS
+async function qasePost (endpoint, data) {
+  const url = `https://api.qase.io/v1/${endpoint}`
+  if (typeof fetch !== 'undefined') {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Token: qaseToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })
+    return await res.json()
+  }
+  const https = require('https')
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = https.request({
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: {
+        Token: qaseToken,
+        'Content-Type': 'application/json'
+      }
+    }, res => {
+      let raw = ''
+      res.on('data', chunk => { raw += chunk })
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)) } catch (e) { resolve(null) }
+      })
+    })
+    req.on('error', reject)
+    req.write(JSON.stringify(data))
+    req.end()
+  })
 }
 
-const targetSuiteId = modSuite ? modSuite.id : (featSuite ? featSuite.id : null)
-const featTitle = featSuite ? featSuite.title : (parentKey ? `${parentKey}: ${parentSummary}` : (f.summary || ctx.issueKey))
-const modTitle = modSuite ? modSuite.title : expectedModName
+// 1. Root suite: 'Frontend' (or 'Backend')
+const rootTitle = isBackend ? 'Backend' : 'Frontend'
+let rootSuite = suites.find(s => s.parent_id == null && s.title.toLowerCase().trim() === rootTitle.toLowerCase().trim())
+if (!rootSuite && qaseToken && !qaseToken.startsWith('__')) {
+  try {
+    const r = await qasePost(`suite/${qaseCode}`, { title: rootTitle })
+    if (r && r.result && r.result.id) {
+      rootSuite = { id: r.result.id, title: rootTitle, parent_id: null }
+      suites.push(rootSuite)
+    }
+  } catch (e) {}
+}
+const rootSuiteId = rootSuite ? rootSuite.id : null
+
+// 2. Child suite: `${ctx.issueKey}: ${f.summary || ctx.summary || ''}`
+const issueSummary = f.summary || ctx.summary || 'Авторизация и регистрация'
+const childTitle = `${ctx.issueKey}: ${issueSummary}`.slice(0, 250)
+
+let childSuite = null
+if (rootSuiteId) {
+  childSuite = suites.find(s => s.parent_id === rootSuiteId && (s.title.toLowerCase().includes(ctx.issueKey.toLowerCase()) || s.title.toLowerCase().trim() === childTitle.toLowerCase().trim()))
+}
+if (!childSuite && qaseToken && !qaseToken.startsWith('__')) {
+  try {
+    const payload = { title: childTitle }
+    if (rootSuiteId) payload.parent_id = rootSuiteId
+    const r = await qasePost(`suite/${qaseCode}`, payload)
+    if (r && r.result && r.result.id) {
+      childSuite = { id: r.result.id, title: childTitle, parent_id: rootSuiteId }
+      suites.push(childSuite)
+    }
+  } catch (e) {}
+}
+
+const targetSuiteId = childSuite ? childSuite.id : (rootSuiteId || null)
+const featTitle = rootSuite ? rootSuite.title : rootTitle
+const modTitle = childSuite ? childSuite.title : childTitle
 
 function esc (s) {
   return String(s == null ? '' : s)

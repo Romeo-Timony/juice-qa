@@ -88,28 +88,38 @@ for (const c of (frontendCases.length ? frontendCases : cases.slice(0, 2))) {
   frontendCode.push('')
 }
 
+const kind = prevCases.kind || filterData.kind || 'generic'
+const isBackendOnly = kind === 'backend'
+const isFrontendOnly = kind === 'frontend'
+
+const files = []
+if (!isFrontendOnly) {
+  files.push({
+    type: 'backend',
+    fileName: backendFileName,
+    stagingPath: `tests/review/backend/${backendFileName}`,
+    targetPath: `tests/backend/${backendFileName}`,
+    testCount: backendCases.length || 1,
+    code: backendCode.join('\n')
+  })
+}
+if (!isBackendOnly) {
+  files.push({
+    type: 'frontend',
+    fileName: frontendFileName,
+    stagingPath: `tests/review/frontend/${frontendFileName}`,
+    targetPath: `tests/frontend/${frontendFileName}`,
+    testCount: frontendCases.length || 1,
+    code: frontendCode.join('\n')
+  })
+}
+
 return [{
   json: {
     issueKey,
     issueSummary,
+    kind,
     scaffoldTimestamp: new Date().toISOString(),
-    files: [
-      {
-        type: 'backend',
-        fileName: backendFileName,
-        stagingPath: `tests/review/backend/${backendFileName}`,
-        targetPath: `tests/backend/${backendFileName}`,
-        testCount: backendCases.length || 1,
-        code: backendCode.join('\n')
-      },
-      {
-        type: 'frontend',
-        fileName: frontendFileName,
-        stagingPath: `tests/review/frontend/${frontendFileName}`,
-        targetPath: `tests/frontend/${frontendFileName}`,
-        testCount: frontendCases.length || 1,
-        code: frontendCode.join('\n')
-      }
-    ]
+    files
   }
 }]

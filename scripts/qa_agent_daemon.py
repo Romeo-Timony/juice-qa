@@ -51,7 +51,7 @@ def get_in_progress_issues():
     url = f"{JIRA_URL}/rest/api/3/search/jql"
     jql = 'status = 10046 OR status = "In Progress"'
     try:
-        res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment"}, timeout=10)
+        res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment,labels,summary"}, timeout=10)
         res.raise_for_status()
         return res.json().get("issues", [])
     except requests.exceptions.RequestException as e:
@@ -153,50 +153,61 @@ def daemon_loop():
             issues = get_in_progress_issues()
             for issue in issues:
                 issue_key = issue["key"]
-                comments = issue.get("fields", {}).get("comment", {}).get("comments", [])
+                fields = issue.get("fields", {})
+                labels = fields.get("labels", [])
                 
-                has_stage_7 = any("Автотесты созданы и добавлены в проект" in str(c.get("body", {})) for c in comments)
-                
-                if has_stage_7:
-                    safe_key = issue_key.lower().replace("-", "")
-                    api_file = BASE_DIR / f"tests/backend/test_{safe_key}_api.py"
-                    ui_file = BASE_DIR / f"tests/frontend/test_{safe_key}_ui.py"
-                    
-                    if not api_file.exists() or not ui_file.exists():
-                        exec_id = get_latest_execution_id(comments)
+                # If already labeled as autotests created, do not re-run
+                if "qa-autotests-created" in labels:
+                    continue
+
+                comments = fields.get("comment", {}).get("comments", [])
+                stage_7_body = None
+                for c in comments:
+                    body_text = str(c.get("body", {}))
+                    if "Автотесты созданы и добавлены в проект" in body_text:
+                        stage_7_body = body_text
+                        break
+
+                if stage_7_body:
+                    exec_id = get_latest_execution_id(comments)
+                    if exec_id:
+                        logger.info(f"Найден n8n_execution ID: {exec_id} для {issue_key}")
+                    else:
+                        logger.info("N8N_EXECUTION_ID не указан в комментариях Jira")
+
+                    logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
+                    try:
+                        branch_name = prepare_branch(issue_key)
+
+                        execution_file = BASE_DIR / "n8n_execution.json"
                         if exec_id:
-                            logger.info(f"Найден n8n_execution ID: {exec_id} для {issue_key}")
-                        else:
-                            logger.info("N8N_EXECUTION_ID не указан в комментариях Jira")
+                            with open(execution_file, "w") as f:
+                                json.dump({"executionId": exec_id}, f)
+                            logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
+                        elif execution_file.exists():
+                            execution_file.unlink()
 
-                        logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
-                        try:
-                            branch_name = prepare_branch(issue_key)
+                        summary = str(fields.get("summary", "")).lower()
+                        is_frontend = ("tests/frontend" in stage_7_body and "tests/backend" not in stage_7_body) or "frontend" in summary or issue_key.upper() == "JS-16"
+                        kind = "frontend" if is_frontend else ("backend" if "backend" in summary else "all")
 
-                            execution_file = BASE_DIR / "n8n_execution.json"
-                            if exec_id:
-                                with open(execution_file, "w") as f:
-                                    json.dump({"executionId": exec_id}, f)
-                                logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
-                            elif execution_file.exists():
-                                execution_file.unlink()
+                        logger.info(f"Определен тип задачи: {kind}. Генерация тестовых наборов...")
+                        from scaffold_dynamic import generate_tests
+                        generate_tests(issue_key, kind=kind)
+                        update_sqlite(issue_key)
+                        if not git_commit_and_push(issue_key, branch_name):
+                            logger.error(f"❌ Тесты для {issue_key} не отправлены в GitHub — GitHub Actions не запустится.")
+                            continue
 
-                            from scaffold_dynamic import generate_tests
-                            generate_tests(issue_key)
-                            update_sqlite(issue_key)
-                            if not git_commit_and_push(issue_key, branch_name):
-                                logger.error(f"❌ Тесты для {issue_key} не отправлены в GitHub — GitHub Actions не запустится.")
-                                continue
-
-                            from scripts.hitl_review_gate import add_jira_label
-                            add_jira_label(issue_key, "qa-autotests-created")
-                            logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
-                        except subprocess.CalledProcessError as e:
-                            logger.error(f"Ошибка подготовки Git-ветки для {issue_key}: {e.stderr}")
-                        except ImportError as e:
-                            logger.error(f"Ошибка импорта модулей генерации: {e}")
-                        except Exception as ex:
-                            logger.error(f"Критическая ошибка при генерации или обработке тестов для {issue_key}: {ex}", exc_info=True)
+                        from scripts.hitl_review_gate import add_jira_label
+                        add_jira_label(issue_key, "qa-autotests-created")
+                        logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"Ошибка подготовки Git-ветки для {issue_key}: {e.stderr}")
+                    except ImportError as e:
+                        logger.error(f"Ошибка импорта модулей генерации: {e}")
+                    except Exception as ex:
+                        logger.error(f"Критическая ошибка при генерации или обработке тестов для {issue_key}: {ex}", exc_info=True)
                             
         except Exception as e:
             logger.error(f"Глобальная ошибка в цикле поллинга Jira: {e}", exc_info=True)
