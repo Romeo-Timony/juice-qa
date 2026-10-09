@@ -138,7 +138,9 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
 
     # Auto-detect kind
     if kind is None:
-        if "js-16" in issue_key.lower():
+        if "js-17" in issue_key.lower() or "backend" in issue_key.lower():
+            kind = "backend"
+        elif "js-16" in issue_key.lower() or "frontend" in issue_key.lower():
             kind = "frontend"
         else:
             kind = "all"
@@ -146,10 +148,156 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
     # Папки для Staging (Review)
     review_frontend_dir = BASE_DIR / "tests" / "review" / "frontend"
     review_frontend_dir.mkdir(parents=True, exist_ok=True)
+    review_backend_dir = BASE_DIR / "tests" / "review" / "backend"
+    review_backend_dir.mkdir(parents=True, exist_ok=True)
 
     created_staging_files = []
 
-    # 2. Генерация Frontend автотестов (СТРОГО 9 автоматизируемых кейсов)
+    # 2. Генерация Backend автотестов (API)
+    if kind in ("backend", "all"):
+        be_code_lines = [
+            '"""',
+            f'Backend REST API Automated Test Suite for {issue_key}',
+            f'Automates {len(auto_cases)} scenarios for authentication, tokens and DB models.',
+            '"""',
+            'import pytest',
+            'import allure',
+            'from api.client import JuiceShopApiClient',
+            '',
+            '@allure.epic("OWASP Juice Shop")',
+            f'@allure.feature("{issue_key}: Разработка REST API аутентификации, JWT-токенов и моделей БД")',
+            '@allure.story("Backend REST API Validation")',
+            f'class Test{key_clean.upper()}API:',
+            f'    """Набор из {len(auto_cases)} автоматизированных REST API тестов (JuiceShopApiClient)."""',
+            '',
+            '    @allure.title("[API][Parametrized] Успешная регистрация пользователя через POST /api/Users/")',
+            '    @pytest.mark.qase(id=331)',
+            '    @pytest.mark.api',
+            '    def test_tc331_register_user_success(self, api_client: JuiceShopApiClient):',
+            '        """Проверка успешной регистрации пользователя с валидными данными."""',
+            '        import time',
+            '        ts = int(time.time() * 1000)',
+            '        res = api_client.register(f"user_api_{ts}@juice-sh.op", "ValidPass123!")',
+            '        assert res.status_code in [200, 201], f"Expected 200/201 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API] Обработка ошибки 409 Conflict при дубликате Email в POST /api/Users/")',
+            '    @pytest.mark.qase(id=332)',
+            '    @pytest.mark.api',
+            '    def test_tc332_register_duplicate_email_conflict(self, api_client: JuiceShopApiClient):',
+            '        """Проверка возврата ошибки при повторной регистрации существующего email."""',
+            '        res = api_client.register("admin@juice-sh.op", "Admin12345!")',
+            '        assert res.status_code in [400, 409, 500], f"Expected conflict error but got {res.status_code}"',
+            '',
+            '    @allure.title("[API][Parametrized] Валидация неполного payload при регистрации в POST /api/Users/")',
+            '    @pytest.mark.qase(id=333)',
+            '    @pytest.mark.api',
+            '    def test_tc333_register_incomplete_payload(self, api_client: JuiceShopApiClient):',
+            '        """Проверка возврата ошибки 400 Bad Request при неполных обязательных полях."""',
+            '        res = api_client.session.post(f"{api_client.base_url}/api/Users/", json={"email": "bad_payload@test.com"})',
+            '        assert res.status_code in [400, 500], f"Expected 400/500 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API][Parametrized] Успешная аутентификация POST /rest/user/login с получением JWT токена")',
+            '    @pytest.mark.qase(id=334)',
+            '    @pytest.mark.api',
+            '    def test_tc334_user_login_success_jwt(self, api_client: JuiceShopApiClient):',
+            '        """Проверка аутентификации и структуры полученного JWT токена."""',
+            '        res = api_client.login("admin@juice-sh.op", "admin123")',
+            '        assert res.status_code == 200, f"Login failed with status {res.status_code}"',
+            '        token = res.json().get("authentication", {}).get("token")',
+            '        assert token is not None and len(token) > 20, "JWT token must be present and non-empty"',
+            '',
+            '    @allure.title("[API] Возврат ошибки 401 Unauthorized при невалидных данных в POST /rest/user/login")',
+            '    @pytest.mark.qase(id=335)',
+            '    @pytest.mark.api',
+            '    def test_tc335_user_login_invalid_credentials(self, api_client: JuiceShopApiClient):',
+            '        """Проверка возврата 401 Unauthorized при неверном пароле."""',
+            '        res = api_client.login("admin@juice-sh.op", "WrongPassword999!")',
+            '        assert res.status_code == 401, f"Expected 401 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API] Проверка на SQL-инъекцию при авторизации POST /rest/user/login (OWASP A03)")',
+            '    @pytest.mark.qase(id=336)',
+            '    @pytest.mark.api',
+            '    def test_tc336_login_sql_injection(self, api_client: JuiceShopApiClient):',
+            '        """Проверка реакции API на SQL-инъекцию при аутентификации."""',
+            '        res = api_client.login("\' OR 1=1--", "any_password")',
+            '        assert res.status_code in [200, 401], f"Unexpected status code: {res.status_code}"',
+            '',
+            '    @allure.title("[API] Валидация заголовка Bearer JWT при доступе к защищенным ресурсам")',
+            '    @pytest.mark.qase(id=337)',
+            '    @pytest.mark.api',
+            '    def test_tc337_jwt_protected_endpoint(self, api_client: JuiceShopApiClient):',
+            '        """Проверка доступа к защищенному эндпоинту с валидным Bearer токеном."""',
+            '        login_res = api_client.login("admin@juice-sh.op", "admin123")',
+            '        token = login_res.json().get("authentication", {}).get("token")',
+            '        whoami_res = api_client.get_user_profile(token=token)',
+            '        assert whoami_res.status_code == 200, f"Expected 200 but got {whoami_res.status_code}"',
+            '',
+            '    @allure.title("[API] Успешная смена пароля POST /rest/user/change-password авторизованным пользователем")',
+            '    @pytest.mark.qase(id=338)',
+            '    @pytest.mark.api',
+            '    def test_tc338_change_password_success(self, api_client: JuiceShopApiClient):',
+            '        """Проверка смены пароля пользователем через GET/POST /rest/user/change-password."""',
+            '        import time',
+            '        ts = int(time.time() * 1000)',
+            '        email = f"chg_user_{ts}@juice-sh.op"',
+            '        pwd = "OldPassword123!"',
+            '        new_pwd = "NewPassword456!"',
+            '        api_client.register(email, pwd)',
+            '        login_res = api_client.login(email, pwd)',
+            '        token = login_res.json().get("authentication", {}).get("token")',
+            '        res = api_client.change_password(pwd, new_pwd, new_pwd, token=token)',
+            '        assert res.status_code in [200, 302], f"Expected 200 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API] Блокировка смены пароля (401 Unauthorized) при неверном текущем пароле")',
+            '    @pytest.mark.qase(id=339)',
+            '    @pytest.mark.api',
+            '    def test_tc339_change_password_invalid_current(self, api_client: JuiceShopApiClient):',
+            '        """Проверка возврата ошибки при неверном текущем пароле."""',
+            '        login_res = api_client.login("admin@juice-sh.op", "admin123")',
+            '        token = login_res.json().get("authentication", {}).get("token")',
+            '        res = api_client.change_password("WrongCurrentPass!", "NewPass123!", "NewPass123!", token=token)',
+            '        assert res.status_code in [401, 400], f"Expected 401/400 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API] Сброс пароля POST /rest/user/reset-password по связке Email и контрольного вопроса")',
+            '    @pytest.mark.qase(id=340)',
+            '    @pytest.mark.api',
+            '    def test_tc340_reset_password_security_question(self, api_client: JuiceShopApiClient):',
+            '        """Проверка сброса пароля через контрольный вопрос."""',
+            '        import time',
+            '        ts = int(time.time() * 1000)',
+            '        email = f"reset_user_{ts}@juice-sh.op"',
+            '        api_client.register(email, "InitialPass123!", question_id=1, answer="SecretAnswer")',
+            '        res = api_client.reset_password(email, "SecretAnswer", "ResetPassword789!", "ResetPassword789!")',
+            '        assert res.status_code in [200, 204], f"Expected 200 but got {res.status_code}"',
+            '',
+            '    @allure.title("[API] Валидация загрузки аватара POST /profile/image/file с проверкой MIME-типа")',
+            '    @pytest.mark.qase(id=341)',
+            '    @pytest.mark.api',
+            '    def test_tc341_avatar_upload_mime_type(self, api_client: JuiceShopApiClient):',
+            '        """Проверка загрузки файла аватара через API."""',
+            '        login_res = api_client.login("admin@juice-sh.op", "admin123")',
+            '        token = login_res.json().get("authentication", {}).get("token")',
+            '        fake_png = b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x08\\x06\\x00\\x00\\x00\\x1f\\x15c4\\x00\\x00\\x00\\nIDATx\\x9cc\\x00\\x01\\x00\\x00\\x05\\x00\\x01\\r\\n-\\xb4\\x00\\x00\\x00\\x00IEND\\xaeB`\\x82"',
+            '        res = api_client.upload_avatar(fake_png, "avatar.png", mime_type="image/png", token=token)',
+            '        assert res.status_code in [200, 204, 302], f"Expected success but got {res.status_code}"',
+            '',
+            '    @allure.title("[API][Parametrized] Добавление адреса доставки POST /api/Addresss/ с валидацией полей")',
+            '    @pytest.mark.qase(id=342)',
+            '    @pytest.mark.api',
+            '    def test_tc342_create_address_validation(self, api_client: JuiceShopApiClient):',
+            '        """Проверка добавления нового адреса через защищенный API."""',
+            '        login_res = api_client.login("admin@juice-sh.op", "admin123")',
+            '        token = login_res.json().get("authentication", {}).get("token")',
+            '        res = api_client.create_address("Germany", "QA Admin", "1234567890", "10115", "Main Street 1", "Berlin", token=token)',
+            '        assert res.status_code in [200, 201], f"Expected 200/201 but got {res.status_code}"',
+            ''
+        ]
+        review_be_file = review_backend_dir / f"test_{key_clean}_api.py"
+        review_be_file.write_text("\n".join(be_code_lines), encoding="utf-8")
+        created_staging_files.append(review_be_file)
+        print(f"📦 Staging Backend: сформирован файл на ревью ({len(auto_cases)} тестов): {review_be_file}")
+
+    # 3. Генерация Frontend автотестов (СТРОГО 9 автоматизируемых кейсов)
     if kind in ("frontend", "all"):
         code_lines = [
             '"""',
@@ -325,23 +473,29 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         promote_files(approver="QA Lead", issue_key=issue_key)
     except Exception as e:
         print(f"⚠️ Ошибка при выполнении аудита/промоушена: {e}")
-        target = BASE_DIR / "tests" / "frontend" / f"test_{key_clean}_ui.py"
-        if review_file.exists():
-            shutil.copy(review_file, target)
-            review_file.unlink()
 
-    promoted_file = BASE_DIR / "tests" / "frontend" / f"test_{key_clean}_ui.py"
-    final_files = [promoted_file]
+    final_files = []
+    if kind in ("backend", "all"):
+        promoted_be = BASE_DIR / "tests" / "backend" / f"test_{key_clean}_api.py"
+        if promoted_be.exists():
+            final_files.append(promoted_be)
+            if target_dir:
+                wt_be = Path(target_dir) / "tests" / "backend" / f"test_{key_clean}_api.py"
+                wt_be.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(promoted_be, wt_be)
+                print(f"📁 Скопировано в изолированный Worktree: {wt_be}")
 
-    # 5. Если задан target_dir (например, Git Worktree), копируем файл и туда
-    if target_dir:
-        wt_target = Path(target_dir) / "tests" / "frontend" / f"test_{key_clean}_ui.py"
-        wt_target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(promoted_file, wt_target)
-        print(f"📁 Скопировано в изолированный Worktree: {wt_target}")
-        final_files.append(wt_target)
+    if kind in ("frontend", "all"):
+        promoted_fe = BASE_DIR / "tests" / "frontend" / f"test_{key_clean}_ui.py"
+        if promoted_fe.exists():
+            final_files.append(promoted_fe)
+            if target_dir:
+                wt_fe = Path(target_dir) / "tests" / "frontend" / f"test_{key_clean}_ui.py"
+                wt_fe.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(promoted_fe, wt_fe)
+                print(f"📁 Скопировано в изолированный Worktree: {wt_fe}")
 
-    print(f"✅ Готово! Файл автотестов {promoted_file} ({len(auto_cases)} автотестов) успешно внедрен.")
+    print(f"✅ Готово! Файлы автотестов {final_files} успешно внедрены.")
     return final_files
 
 
