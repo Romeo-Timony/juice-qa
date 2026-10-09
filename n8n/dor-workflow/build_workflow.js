@@ -445,15 +445,17 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     // =========================================================================
     {
       parameters: {
-        resume: 'webhook',
-        webhookSuffix: 'github-actions-report',
+        path: 'github-actions-report',
+        httpMethod: 'POST',
+        respondWith: 'json',
+        responseBody: '{"success": true}',
         options: {}
       },
-      name: 'Wait: Ожидание результатов GitHub Actions',
-      type: 'n8n-nodes-base.wait',
+      name: 'Webhook: Прием отчетов GitHub Actions',
+      type: 'n8n-nodes-base.webhook',
       typeVersion: 1,
       position: [7300, 260],
-      webhookId: crypto.randomUUID()
+      webhookId: 'github-actions-report'
     },
     {
       parameters: {
@@ -545,8 +547,10 @@ function buildWorkflow ({ jiraCred, geminiCred, qaseCred, webhookToken, geminiMo
     'Jira: Финальный отчет о внедрении автотестов': link('Сохранение файлов на диск'),
     
     // Подключения цепочки GitHub Actions
-    'Сохранение файлов на диск': link('Wait: Ожидание результатов GitHub Actions'),
-    'Wait: Ожидание результатов GitHub Actions': link('Парсинг отчета Allure'),
+    // Сохранение файлов на диск - конец первой цепочки
+    
+    // Вторая цепочка (запускается по вебхуку)
+    'Webhook: Прием отчетов GitHub Actions': link('Парсинг отчета Allure'),
     'Парсинг отчета Allure': link('Jira: Опубликовать отчет Allure')
   }
 
