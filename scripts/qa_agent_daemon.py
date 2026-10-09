@@ -224,6 +224,11 @@ def daemon_loop():
 
                         if push_res.returncode != 0:
                             logger.error(f"Ошибка пуша из worktree: {push_res.stderr.strip()}")
+                            try:
+                                from scripts.telegram_notifier import notify_error
+                                notify_error(issue_key, "Git Push", push_res.stderr.strip())
+                            except Exception:
+                                pass
                             continue
 
                         logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий через Worktree!")
@@ -231,11 +236,22 @@ def daemon_loop():
                         add_jira_label(issue_key, "qa-autotests-created")
                         logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
                     except subprocess.CalledProcessError as e:
-                        logger.error(f"Ошибка выполнения Git-команды для {issue_key}: {e.stderr if hasattr(e, 'stderr') else e}")
+                        err_text = e.stderr if hasattr(e, 'stderr') else str(e)
+                        logger.error(f"Ошибка выполнения Git-команды для {issue_key}: {err_text}")
+                        try:
+                            from scripts.telegram_notifier import notify_error
+                            notify_error(issue_key, "Git Operations", err_text)
+                        except Exception:
+                            pass
                     except ImportError as e:
                         logger.error(f"Ошибка импорта модулей генерации: {e}")
                     except Exception as ex:
                         logger.error(f"Критическая ошибка при генерации или обработке тестов для {issue_key}: {ex}", exc_info=True)
+                        try:
+                            from scripts.telegram_notifier import notify_error
+                            notify_error(issue_key, "Daemon Execution", str(ex))
+                        except Exception:
+                            pass
                             
         except Exception as e:
             logger.error(f"Глобальная ошибка в цикле поллинга Jira: {e}", exc_info=True)
