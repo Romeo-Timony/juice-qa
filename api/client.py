@@ -7,6 +7,9 @@ class JuiceShopApiClient:
         self.session = requests.Session()
         self.token: Optional[str] = None
 
+    def get_connection_status(self) -> requests.Response:
+        return self.session.get(f"{self.base_url}/rest/admin/application-version")
+
     def set_bearer_token(self, token: str):
         self.token = token
         self.session.headers.update({"Authorization": f"Bearer {token}"})
