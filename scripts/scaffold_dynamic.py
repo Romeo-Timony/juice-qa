@@ -6,7 +6,8 @@ from pathlib import Path
 
 DB_PATH = Path("data/qa_pipeline.db")
 
-def generate_tests(issue_key: str, kind: str = None):
+def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None):
+    base_dir = Path(target_dir) if target_dir else Path(".")
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cases = []
@@ -75,7 +76,7 @@ def generate_tests(issue_key: str, kind: str = None):
                 ''
             ])
 
-        backend_path = Path(f"tests/backend/test_{key_clean}_api.py")
+        backend_path = base_dir / f"tests/backend/test_{key_clean}_api.py"
         backend_path.parent.mkdir(parents=True, exist_ok=True)
         backend_path.write_text('\n'.join(backend_code), encoding='utf-8')
         created_files.append(backend_path)
@@ -122,7 +123,7 @@ def generate_tests(issue_key: str, kind: str = None):
             ''
         ]
 
-        frontend_path = Path(f"tests/frontend/test_{key_clean}_ui.py")
+        frontend_path = base_dir / f"tests/frontend/test_{key_clean}_ui.py"
         frontend_path.parent.mkdir(parents=True, exist_ok=True)
         frontend_path.write_text('\n'.join(frontend_code), encoding='utf-8')
         created_files.append(frontend_path)

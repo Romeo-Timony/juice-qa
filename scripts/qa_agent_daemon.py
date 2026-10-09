@@ -177,33 +177,60 @@ def daemon_loop():
 
                     logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
                     try:
-                        branch_name = prepare_branch(issue_key)
+                        branch_name = f"qa/{issue_key.lower()}"
+                        wt_dir = BASE_DIR / ".worktrees" / f"qa-{issue_key.lower()}"
+                        wt_dir.parent.mkdir(parents=True, exist_ok=True)
+                        logger.info(f"Подготовка изолированного Git Worktree {wt_dir} для {branch_name}...")
+                        git("fetch", "origin")
+                        if wt_dir.exists():
+                            subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
 
-                        execution_file = BASE_DIR / "n8n_execution.json"
+                        add_res = subprocess.run(["git", "worktree", "add", "-B", branch_name, str(wt_dir), "origin/main"], cwd=BASE_DIR, capture_output=True, text=True)
+                        if add_res.returncode != 0:
+                            logger.error(f"Не удалось создать worktree: {add_res.stderr}")
+                            continue
+
+                        execution_file = wt_dir / "n8n_execution.json"
                         if exec_id:
                             with open(execution_file, "w") as f:
                                 json.dump({"executionId": exec_id}, f)
-                            logger.info(f"Сохранен n8n_execution.json с ID: {exec_id}")
-                        elif execution_file.exists():
-                            execution_file.unlink()
+                            logger.info(f"Сохранен n8n_execution.json с ID: {exec_id} в worktree")
 
                         summary = str(fields.get("summary", "")).lower()
                         is_frontend = ("tests/frontend" in stage_7_body and "tests/backend" not in stage_7_body) or "frontend" in summary or issue_key.upper() == "JS-16"
                         kind = "frontend" if is_frontend else ("backend" if "backend" in summary else "all")
 
-                        logger.info(f"Определен тип задачи: {kind}. Генерация тестовых наборов...")
+                        logger.info(f"Определен тип задачи: {kind}. Генерация в изолированном Worktree...")
                         from scaffold_dynamic import generate_tests
-                        generate_tests(issue_key, kind=kind)
+                        generate_tests(issue_key, kind=kind, target_dir=wt_dir)
                         update_sqlite(issue_key)
-                        if not git_commit_and_push(issue_key, branch_name):
-                            logger.error(f"❌ Тесты для {issue_key} не отправлены в GitHub — GitHub Actions не запустится.")
+
+                        # Git in worktree
+                        subprocess.run(["git", "add", "tests/", "n8n_execution.json"], cwd=wt_dir, check=False)
+                        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=wt_dir).returncode == 0:
+                            logger.info("Нет изменений для коммита в worktree.")
+                            subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
                             continue
 
+                        logger.info("Создание коммита в worktree...")
+                        subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}"], cwd=wt_dir, check=True)
+                        logger.info(f"Пуш ветки {branch_name} на удаленный сервер из worktree...")
+                        push_res = subprocess.run(["git", "push", "-u", "--force-with-lease", "origin", branch_name], cwd=wt_dir, capture_output=True, text=True)
+
+                        # Clean up worktree
+                        subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
+                        logger.info(f"Worktree {wt_dir} успешно очищен.")
+
+                        if push_res.returncode != 0:
+                            logger.error(f"Ошибка пуша из worktree: {push_res.stderr.strip()}")
+                            continue
+
+                        logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий через Worktree!")
                         from scripts.hitl_review_gate import add_jira_label
                         add_jira_label(issue_key, "qa-autotests-created")
                         logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
                     except subprocess.CalledProcessError as e:
-                        logger.error(f"Ошибка подготовки Git-ветки для {issue_key}: {e.stderr}")
+                        logger.error(f"Ошибка выполнения Git-команды для {issue_key}: {e.stderr if hasattr(e, 'stderr') else e}")
                     except ImportError as e:
                         logger.error(f"Ошибка импорта модулей генерации: {e}")
                     except Exception as ex:

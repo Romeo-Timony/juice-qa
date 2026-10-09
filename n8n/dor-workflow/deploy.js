@@ -95,7 +95,8 @@ async function ensureCredential (key, envId, name, type, data) {
 
   console.log('\n--- Step 4: Configuring Jira Webhook ---')
   const hookName = 'n8n QA DoR Gate (JS -> In Progress)'
-  const hookUrl = `${N8N_URL}/webhook/${WEBHOOK_PATH}?token=${state.webhookToken}`
+  const webhookBase = (cfg.NGROK_URL || N8N_URL).replace(/\/$/, '')
+  const hookUrl = `${webhookBase}/webhook/${WEBHOOK_PATH}?token=${state.webhookToken}`
   try {
     const hooks = await jira('GET', '/rest/webhooks/1.0/webhook')
     for (const h of hooks.filter(h => h.name === hookName)) {

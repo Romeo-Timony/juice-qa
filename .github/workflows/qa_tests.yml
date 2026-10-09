@@ -108,15 +108,17 @@ jobs:
           --arg allureSummary "$SUMMARY" \
           '{issueKey: $issueKey, status: $status, runUrl: $runUrl, allureSummary: $allureSummary}')
 
-        echo "Sending report to n8n webhook..."
+        echo "Sending report to n8n webhook via HTTPS (ngrok)..."
         HTTP_CODE=$(curl -s -o response.txt -w '%{http_code}' -X POST \
-          "http://201.34.147.33:5678/webhook/github-actions-report" \
+          "https://stylish-mary-bluebelled.ngrok-free.dev/webhook/github-actions-report" \
           -H "Content-Type: application/json" \
           -d "$PAYLOAD")
-        echo "n8n responded with HTTP $HTTP_CODE: $(cat response.txt)"
-        if [ "$HTTP_CODE" -ge 400 ]; then
-          echo "::error::n8n webhook rejected the report (HTTP $HTTP_CODE)"
-          exit 1
+        echo "n8n response ($HTTP_CODE): $(cat response.txt)"
+        if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" -eq 000 ]; then
+          echo "Fallback sending directly to n8n IP..."
+          curl -s -X POST "http://201.34.147.33:5678/webhook/github-actions-report" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
         fi
 
     - name: Upload Allure Results as Artifact

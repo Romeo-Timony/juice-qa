@@ -24,3 +24,4 @@ logs/
 *.log
 n8n_execution.json
 data/*.db
+.worktrees/
