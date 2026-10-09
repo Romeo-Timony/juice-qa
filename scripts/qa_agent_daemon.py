@@ -206,7 +206,8 @@ def daemon_loop():
                         update_sqlite(issue_key)
 
                         # Git in worktree
-                        subprocess.run(["git", "add", "tests/", "n8n_execution.json"], cwd=wt_dir, check=False)
+                        subprocess.run(["git", "add", "tests/"], cwd=wt_dir, check=False)
+                        subprocess.run(["git", "add", "-f", "n8n_execution.json"], cwd=wt_dir, check=False)
                         if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=wt_dir).returncode == 0:
                             logger.info("Нет изменений для коммита в worktree.")
                             subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
@@ -215,7 +216,7 @@ def daemon_loop():
                         logger.info("Создание коммита в worktree...")
                         subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}"], cwd=wt_dir, check=True)
                         logger.info(f"Пуш ветки {branch_name} на удаленный сервер из worktree...")
-                        push_res = subprocess.run(["git", "push", "-u", "--force-with-lease", "origin", branch_name], cwd=wt_dir, capture_output=True, text=True)
+                        push_res = subprocess.run(["git", "push", "-u", "--force", "origin", branch_name], cwd=wt_dir, capture_output=True, text=True)
 
                         # Clean up worktree
                         subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)

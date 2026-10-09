@@ -24,16 +24,38 @@ REPORT_FILE = REVIEW_DIR / "REVIEW_REPORT.md"
 
 
 def post_jira_comment(issue_key: str, body: str) -> Optional[str]:
-    """Публикация комментария в Jira через REST API v2."""
+    """Публикация или обновление комментария в Jira через REST API v2."""
     base_url = (os.getenv("ATLASSIAN_BASE_URL") or "https://romeo-timony.atlassian.net").rstrip("/")
     email = os.getenv("ATLASSIAN_USER_EMAIL")
     token = os.getenv("ATLASSIAN_API_TOKEN")
     if not (email and token):
         print("⚠️ Пропущен пост в Jira: отсутствуют учетные данные в .env")
         return None
-    url = f"{base_url}/rest/api/2/issue/{issue_key}/comment"
+
+    # Check if this comment belongs to a specific pipeline stage
+    header = body.strip().splitlines()[0] if body else ""
+    match = re.search(r"\[Этап \d+ из \d+\]", header)
+    tag = match.group(0) if match else None
+
+    comments_url = f"{base_url}/rest/api/2/issue/{issue_key}/comment"
     try:
-        res = requests.post(url, auth=(email, token), json={"body": body}, timeout=15)
+        if tag:
+            res_get = requests.get(comments_url, auth=(email, token), timeout=15)
+            if res_get.ok:
+                for c in res_get.json().get("comments", []):
+                    c_body = str(c.get("body", ""))
+                    if tag in c_body:
+                        cid = c["id"]
+                        exec_match = re.search(r"\[N8N_EXECUTION_ID:\s*([^\]]+)\]", c_body)
+                        updated_body = body
+                        if exec_match and "[N8N_EXECUTION_ID:" not in body:
+                            updated_body += f"\n\n[N8N_EXECUTION_ID: {exec_match.group(1)}]"
+                        res_put = requests.put(f"{comments_url}/{cid}", auth=(email, token), json={"body": updated_body}, timeout=15)
+                        if res_put.ok:
+                            print(f"🔄 Обновлен существующий комментарий в Jira ({issue_key}, ID={cid}, {tag})")
+                            return cid
+
+        res = requests.post(comments_url, auth=(email, token), json={"body": body}, timeout=15)
         if res.ok:
             cid = res.json().get("id")
             print(f"📢 Опубликован комментарий в Jira ({issue_key}, ID={cid})")
@@ -43,6 +65,7 @@ def post_jira_comment(issue_key: str, body: str) -> Optional[str]:
     except Exception as e:
         print(f"⚠️ Ошибка сетевого запроса к Jira: {e}")
     return None
+
 
 
 def add_jira_label(issue_key: str, label: str):
