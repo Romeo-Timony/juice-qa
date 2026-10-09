@@ -15,6 +15,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      juice-shop:
+        image: bkimminich/juice-shop
+        ports:
+          - 3000:3000
+
+    env:
+      JUICE_SHOP_LOCAL_URL: http://localhost:3000
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -27,34 +36,46 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest playwright requests pytest-playwright allure-pytest
-        playwright install chromium
+        pip install -r requirements.txt
+        playwright install --with-deps chromium
+
+    - name: Wait for Juice Shop
+      run: |
+        for i in $(seq 1 60); do
+          if curl -sf http://localhost:3000/rest/admin/application-version > /dev/null; then
+            echo "Juice Shop is up"; exit 0
+          fi
+          sleep 2
+        done
+        echo "Juice Shop did not start in time"; exit 1
 
     - name: Run Backend API Tests
       continue-on-error: true
       id: backend_tests
       run: |
+        set -o pipefail
         if [ -d "tests/backend" ]; then
-          pytest tests/backend/ -v --alluredir=allure-results
+          pytest tests/backend/ --alluredir=allure-results 2>&1 | tee backend.log
         else
-          echo "Backend tests folder not found, skipping."
+          echo "Backend tests folder not found, skipping." | tee backend.log
         fi
 
     - name: Run Frontend UI Tests
       continue-on-error: true
       id: frontend_tests
       run: |
+        set -o pipefail
         if [ -d "tests/frontend" ]; then
-          pytest tests/frontend/ -v --alluredir=allure-results
+          pytest tests/frontend/ --alluredir=allure-results 2>&1 | tee frontend.log
         else
-          echo "Frontend tests folder not found, skipping."
+          echo "Frontend tests folder not found, skipping." | tee frontend.log
         fi
 
     - name: Get Issue Key from Branch
       id: extract_key
       run: |
         # Extract JS-XX from qa/js-xx
-        BRANCH_NAME=${GITHUB_REF#refs/heads/}
+        BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
         ISSUE_KEY=$(echo "$BRANCH_NAME" | grep -o -E 'qa/js-[0-9]+' | sed 's/qa\///' | tr 'a-z' 'A-Z')
         if [ -z "$ISSUE_KEY" ]; then ISSUE_KEY="JS-UNKNOWN"; fi
         echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
@@ -62,27 +83,43 @@ jobs:
     - name: Send Report to n8n Webhook
       if: always()
       run: |
-        # Check overall status
         if [ "${{ steps.backend_tests.outcome }}" == "success" ] && [ "${{ steps.frontend_tests.outcome }}" == "success" ]; then
           STATUS="success"
         else
           STATUS="failed"
         fi
-        
-        # Read execution ID
+
         EXEC_ID=""
         if [ -f "n8n_execution.json" ]; then
-          EXEC_ID=$(cat n8n_execution.json | jq -r '.executionId')
+          EXEC_ID=$(jq -r '.executionId // empty' n8n_execution.json)
         fi
-        
+
         ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
         if [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then
           echo "Issue key could not be determined from branch, skipping webhook notification."
-        else
-          echo "Sending report to n8n webhook..."
-          curl -X POST http://201.34.147.33:5678/webhook/github-actions-report \
-            -H "Content-Type: application/json" \
-            -d "{\"issueKey\": \"${{ steps.extract_key.outputs.issue_key }}\", \"status\": \"$STATUS\", \"runUrl\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\", \"allureSummary\": \"Тесты завершены (см. артефакты GitHub Actions)\"}"
+          exit 0
+        fi
+
+        BACKEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' backend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)
+        FRONTEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' frontend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)
+        SUMMARY="Backend: ${BACKEND_SUMMARY:-нет данных}; Frontend: ${FRONTEND_SUMMARY:-нет данных}"
+
+        PAYLOAD=$(jq -n \
+          --arg issueKey "$ISSUE_KEY" \
+          --arg status "$STATUS" \
+          --arg runUrl "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+          --arg allureSummary "$SUMMARY" \
+          '{issueKey: $issueKey, status: $status, runUrl: $runUrl, allureSummary: $allureSummary}')
+
+        echo "Sending report to n8n webhook..."
+        HTTP_CODE=$(curl -s -o response.txt -w '%{http_code}' -X POST \
+          "http://201.34.147.33:5678/webhook/github-actions-report" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD")
+        echo "n8n responded with HTTP $HTTP_CODE: $(cat response.txt)"
+        if [ "$HTTP_CODE" -ge 400 ]; then
+          echo "::error::n8n webhook rejected the report (HTTP $HTTP_CODE)"
+          exit 1
         fi
 
     - name: Upload Allure Results as Artifact
