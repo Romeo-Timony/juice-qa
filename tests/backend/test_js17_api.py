@@ -1,7 +1,7 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-09 14:32:54 UTC | AI Audit: NEEDS_REVISION (65/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-10 19:28:26 UTC | AI Audit: NEEDS_REVISION (58/100)
 """
 Backend REST API Automated Test Suite for JS-17
-Automates 11 scenarios for authentication, tokens and DB models.
+Automates 12 scenarios for authentication, tokens and DB models.
 """
 import pytest
 import allure
@@ -11,7 +11,7 @@ from api.client import JuiceShopApiClient
 @allure.feature("JS-17: Разработка REST API аутентификации, JWT-токенов и моделей БД")
 @allure.story("Backend REST API Validation")
 class TestJS17API:
-    """Набор из 11 автоматизированных REST API тестов (JuiceShopApiClient)."""
+    """Набор из 12 автоматизированных REST API тестов (JuiceShopApiClient)."""
 
     @allure.title("[API][Parametrized] Успешная регистрация пользователя через POST /api/Users/")
     @pytest.mark.qase(id=331)
@@ -35,6 +35,7 @@ class TestJS17API:
     @pytest.mark.qase(id=333)
     @pytest.mark.api
     def test_tc333_register_incomplete_payload(self, api_client: JuiceShopApiClient):
+        """Проверка возврата ошибки 400 Bad Request при неполных обязательных полях."""
         res = api_client.session.post(f"{api_client.base_url}/api/Users/", json={"email": "bad_payload@test.com"})
         assert res.status_code in [201, 400, 422, 500], f"Expected 400/422/500 or permissive 201 but got {res.status_code}"
 
