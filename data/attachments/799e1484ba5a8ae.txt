@@ -1,0 +1,6 @@
+curl -X GET 'http://localhost:3000/rest/user/change-password'
+  -H 'User-Agent: python-requests/2.34.2'
+  -H 'Accept-Encoding: gzip, deflate'
+  -H 'Accept: */*'
+  -H 'Connection: keep-alive'
+  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiYWRtaW5AanVpY2Utc2gub3AiLCJwYXNzd29yZCI6IjAxOTIwMjNhN2JiZDczMjUwNTE2ZjA2OWRmMThiNTAwIiwicm9sZSI6ImFkbWluIiwiZGVsdXhlVG9rZW4iOiIiLCJsYXN0TG9naW5JcCI6IiIsInByb2ZpbGVJbWFnZSI6ImFzc2V0cy9wdWJsaWMvaW1hZ2VzL3VwbG9hZHMvZGVmYXVsdEFkbWluLnBuZyIsInRvdHBTZWNyZXQiOiIiLCJpc0FjdGl2ZSI6dHJ1ZSwiY3JlYXRlZEF0IjoiMjAyNi0xMC0xMSAxNzowMzo0MC40OTMgKzAwOjAwIiwidXBkYXRlZEF0IjoiMjAyNi0xMC0xMSAxNzowMzo0MC40OTMgKzAwOjAwIiwiZGVsZXRlZEF0IjpudWxsfSwiYmlkIjoxLCJpYXQiOjE3OTE3MzgyNTF9.xmXsa0oca-rsSaOJ9mgyZjY0TqYwfRG-iuLRQGCyfoDhyXpUKgNpo4eqwTQOOG-kY5Rc5py2trwa-T2cLnrO15vUZJoQpdEFGq-vfYXyndtV7p0a5HE89s0kCW87XlAVlAxT1mdFS_UGskpeYNIskTvH-Tg4n9JFuXmNzLzuCwE'
