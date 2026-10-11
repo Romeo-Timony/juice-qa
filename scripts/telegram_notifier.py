@@ -6,13 +6,18 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv, set_key
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 load_dotenv(ENV_FILE)
 
 DEFAULT_BOT_TOKEN = "8463540623:AAHmW9uuff8C_XQDk4cLby1GoVyc7-zo4Ek"
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or DEFAULT_BOT_TOKEN
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or "1434200911"
 
 
 def get_or_detect_chat_id() -> Optional[str]:

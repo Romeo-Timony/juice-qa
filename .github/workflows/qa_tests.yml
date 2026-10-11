@@ -11,6 +11,9 @@ on:
       - master
       - main
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -33,11 +36,18 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install dependencies
+    - name: Set up Java for Allure Report Generator
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install dependencies & Allure CLI
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         playwright install --with-deps chromium
+        npm install -g allure-commandline --loglevel=error
 
     - name: Wait for Juice Shop
       run: |
@@ -73,8 +83,39 @@ jobs:
           exit 0
         fi
 
+    - name: Compile Interactive Allure HTML Report
+      if: always()
+      run: |
+        allure generate allure-results -o allure-report --clean
+
+    - name: Upload Raw Allure Results Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: allure-results
+        path: allure-results
+        retention-days: 14
+
+    - name: Upload Allure HTML Report Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: allure-html-report
+        path: allure-report
+        retention-days: 14
+
+    - name: Deploy Allure Report to GitHub Pages
+      if: always()
+      uses: peaceiris/actions-gh-pages@v3
+      continue-on-error: true
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: gh-pages
+        publish_dir: ./allure-report
+
     - name: Get Issue Key from Branch
       id: extract_key
+      if: always()
       run: |
         # Extract JS-XX from qa/js-xx
         BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
@@ -101,6 +142,14 @@ jobs:
         FRONTEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' frontend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)
         SUMMARY="Backend: ${BACKEND_SUMMARY:-пропущено}; Frontend: ${FRONTEND_SUMMARY:-нет данных}"
 
+        if [ -f "allure-report/widgets/summary.json" ]; then
+          PASSED_COUNT=$(jq -r '.statistic.passed // 0' allure-report/widgets/summary.json 2>/dev/null || echo "0")
+          TOTAL_COUNT=$(jq -r '.statistic.total // 0' allure-report/widgets/summary.json 2>/dev/null || echo "0")
+          if [ "$TOTAL_COUNT" -gt 0 ]; then
+            SUMMARY="${SUMMARY} (Allure: ${PASSED_COUNT}/${TOTAL_COUNT} тестов со всеми шагами и артефактами)"
+          fi
+        fi
+
         PAYLOAD=$(jq -n \
           --arg issueKey "$ISSUE_KEY" \
           --arg status "$STATUS" \
@@ -120,10 +169,3 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD"
         fi
-
-    - name: Upload Allure Results as Artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: allure-results
-        path: allure-results

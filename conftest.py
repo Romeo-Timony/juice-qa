@@ -58,10 +58,11 @@ def pytest_runtest_makereport(item, call):
     setattr(item, "rep_" + report.when, report)
 
 @pytest.fixture(autouse=True)
-def capture_artifacts_on_failure(request):
+def capture_ui_screencasts_and_artifacts(request):
     """
-    Автоматическое снятие скриншота и прикрепление видео-скринкаста при падении UI тестов.
-    При успешном прохождении теста видео удаляется для экономии дискового пространства.
+    Автоматический захват видео-скринкастов для ВСЕХ пройденных и упавших UI-тестов Playwright.
+    Для упавших тестов дополнительно прикрепляется скриншот экрана с ошибкой.
+    Скринкасты сохраняются в формате WebM и воспроизводятся прямо внутри Allure Report.
     """
     yield
     rep_call = getattr(request.node, "rep_call", None)
@@ -86,26 +87,17 @@ def capture_artifacts_on_failure(request):
         except Exception as e:
             print(f"Warning: could not capture failure screenshot: {e}")
 
-        # 2. Сохраняем и прикрепляем скринкаст видео
-        try:
-            if video:
-                page.close()
-                video_path = video.path()
-                if os.path.exists(video_path):
-                    allure.attach.file(
-                        video_path,
-                        name=f"Screencast_Failure_{test_name}",
-                        attachment_type=allure.attachment_type.WEBM
-                    )
-        except Exception as e:
-            print(f"Warning: could not attach failure video: {e}")
-    else:
-        # Если тест прошел успешно — удаляем видеофайл, оставляя только нужные артефакты
-        try:
-            if video:
-                page.close()
-                video_path = video.path()
-                if os.path.exists(video_path):
-                    os.remove(video_path)
-        except Exception:
-            pass
+    # 2. Сохраняем и прикрепляем видео-скринкаст для каждого теста (Passed и Failure)
+    try:
+        if video:
+            page.close()
+            video_path = video.path()
+            if os.path.exists(video_path):
+                status_label = "Failure" if is_failed else "Passed"
+                allure.attach.file(
+                    video_path,
+                    name=f"Screencast_{status_label}_{test_name}",
+                    attachment_type=allure.attachment_type.WEBM
+                )
+    except Exception as e:
+        print(f"Warning: could not attach screencast video: {e}")

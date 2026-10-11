@@ -269,7 +269,7 @@
 <span class="success-text">[11:31:15] [INFO] ✅ Перенесен в боевые тесты: tests/frontend/test_js16_ui.py</span>
 <span class="success-text">[11:31:15] [INFO] 🗑️ Исходный файл в tests/review/ удален (Карантин очищен)</span>
 <span class="dim">[11:31:16] [INFO]</span> 💾 Обновлены SQLite (qa_pipeline.db) и n8n Data Tables (/tables)
-<span class="dim">[11:31:17] [INFO]</span> 📢 Опубликован комментарий в Jira: "[Этап 7 из 7] Автотесты внедрены"
+<span class="dim">[11:31:17] [INFO]</span> 📢 Опубликован комментарий в Jira: "[Этап 7 из 8] Внедрение: Автотесты созданы и добавлены в проект"
 <span class="success-text">[11:31:18] [INFO] ✅ Локальный файл tests/frontend/test_js16_ui.py доступен в IDE!</span>
       </div>
     </div>
@@ -364,10 +364,10 @@
   <!-- СЛОЙ 6: Архитектурные оптимизации QA Lead -->
   <div class="card" style="margin-top: 25px; border: 1px solid #238636;">
     <div class="card-title">
-      <span>🛡️ Архитектурные оптимизации QA Lead (Дедупликация, Анти-спам и Статусная модель)</span>
+      <span>🛡️ Архитектурные оптимизации QA Lead (Дедупликация, Анти-спам, Статусная модель и Telegram)</span>
       <span class="tag green">Внедрено и активно</span>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 13px;">
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; font-size: 13px;">
       <div style="background: #0d1117; padding: 14px; border-radius: 6px; border: 1px solid #30363d;">
         <strong style="color: #58a6ff;">1. Дедупликация Qase TMS</strong><br><br>
         <span style="color: #3fb950;">✓ Логическая и сигнатурная оценка</span><br>
@@ -382,6 +382,11 @@
         <strong style="color: #58a6ff;">3. Статус «Автотесты пройдены»</strong><br><br>
         <span style="color: #3fb950;">✓ Авто-перевод (Transition 31)</span><br>
         При ошибке автотестов задача блокируется в статусе <code>В работе</code> (10046). При успехе (100% passed) задача автоматически переводится в статус <code>Автотесты пройдены</code> (10048) для проведения ручного тестирования QA инженером.
+      </div>
+      <div style="background: #0d1117; padding: 14px; border-radius: 6px; border: 1px solid #30363d;">
+        <strong style="color: #58a6ff;">4. Telegram-бот (@QApower_bot)</strong><br><br>
+        <span style="color: #3fb950;">✓ Интеграция с n8n и демоном</span><br>
+        На последнем шаге (Stage 8) n8n и демон отправляют мгновенный Allure-отчет в Telegram с интерактивными кнопками перехода в GitHub Actions Run и Jira. Токен бота подключен и защищен.
       </div>
     </div>
   </div>
