@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "JiraIssueFields": {
+      "additionalProperties": true,
+      "properties": {
+        "summary": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "issuetype": {
+          "$ref": "#/$defs/JiraIssueType"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "issuetype"
+      ],
+      "title": "JiraIssueFields",
+      "type": "object"
+    },
+    "JiraIssueType": {
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "JiraIssueType",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Structure of `GET /rest/api/2/issue/{key}` that the DoR gate relies on.",
+  "properties": {
+    "key": {
+      "pattern": "^[A-Z][A-Z0-9]+-\\d+$",
+      "title": "Key",
+      "type": "string"
+    },
+    "fields": {
+      "$ref": "#/$defs/JiraIssueFields"
+    }
+  },
+  "required": [
+    "key",
+    "fields"
+  ],
+  "title": "JiraIssueContract",
+  "type": "object"
+}

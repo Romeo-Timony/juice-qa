@@ -69,6 +69,19 @@ for c in comments:
 # Очистка меток
 requests.put(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}", auth=auth, json={"fields": {"labels": []}})
 
+# Удаление ссылок на Qase TMS из Remote Links (сохраняя Confluence и Figma)
+r_links = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/remotelink", auth=auth)
+if r_links.ok and isinstance(r_links.json(), list):
+    for rl in r_links.json():
+        rl_id = rl.get("id")
+        title = rl.get("object", {}).get("title", "")
+        url = rl.get("object", {}).get("url", "")
+        app_name = rl.get("application", {}).get("name", "")
+        global_id = rl.get("globalId", "")
+        if any("qase" in str(x).lower() for x in [title, url, app_name, global_id]):
+            requests.delete(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/remotelink/{rl_id}", auth=auth)
+            print(f" • Удалена ссылка на Qase TMS (ID {rl_id})")
+
 # Перевод в «К выполнению» (10045 или transition id 11)
 r_trans = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/transitions", auth=auth).json().get("transitions", [])
 target_t = next((t for t in r_trans if t["to"]["id"] == "10045" or t["id"] == "11"), None)
@@ -91,15 +104,33 @@ if db_path.exists():
     conn.execute("DELETE FROM test_cases WHERE issue_key = ?", (ISSUE_KEY,))
     conn.execute("DELETE FROM pipeline_stages WHERE issue_key = ?", (ISSUE_KEY,))
     conn.execute("DELETE FROM pipeline_tasks WHERE issue_key = ?", (ISSUE_KEY,))
+    try:
+        conn.execute("DELETE FROM qaops_idempotency WHERE idem_key LIKE ?", (f"%{ISSUE_KEY}%",))
+        conn.execute("DELETE FROM qaops_spans WHERE issue_key = ?", (ISSUE_KEY,))
+        conn.execute("DELETE FROM qaops_metrics WHERE issue_key = ?", (ISSUE_KEY,))
+        conn.execute("DELETE FROM qaops_outbox WHERE url LIKE ? OR idem_key LIKE ?", (f"%{ISSUE_KEY}%", f"%{ISSUE_KEY}%"))
+    except Exception:
+        pass
     conn.commit()
     conn.close()
-    print(" • Записи в SQLite очищены")
+    print(" • Записи в SQLite и QAOps таблицах очищены")
+
+# Очистка существующих файлов автотестов задачи
+for f in (BASE_DIR / "tests" / "backend").glob(f"*{ISSUE_KEY.lower().replace('-', '')}*.py"):
+    f.unlink()
+    print(f" • Удален {f.name}")
+for f in (BASE_DIR / "tests" / "frontend").glob(f"*{ISSUE_KEY.lower().replace('-', '')}*.py"):
+    f.unlink()
+    print(f" • Удален {f.name}")
 
 # Очистка Staging review папки
 review_dir = BASE_DIR / "tests" / "review"
 if review_dir.exists():
     for f in review_dir.rglob("*.py"):
         f.unlink()
+    for r_f in ["REVIEW_REPORT.md", ".review_state.json"]:
+        if (review_dir / r_f).exists():
+            (review_dir / r_f).unlink()
 
 # Очистка изолированного worktree
 wt_dir = BASE_DIR / ".worktrees" / f"qa-{ISSUE_KEY.lower()}"
@@ -128,7 +159,7 @@ for _ in range(25):
     time.sleep(3)
     r_comm = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
     comms = r_comm.get("comments", [])
-    gate1_card = next((c for c in comms if "[Этап 5 из 7]" in c["body"]), None)
+    gate1_card = next((c for c in comms if "[Этап 5 из 8]" in c["body"]), None)
     if gate1_card:
         break
 
@@ -164,7 +195,7 @@ for _ in range(30):
     time.sleep(3)
     r_comm2 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
     comms2 = r_comm2.get("comments", [])
-    gate2_card = next((c for c in comms2 if "[Этап 6 из 7]" in c["body"]), None)
+    gate2_card = next((c for c in comms2 if "[Этап 6 из 8]" in c["body"]), None)
     if gate2_card:
         break
 
@@ -200,7 +231,7 @@ for _ in range(25):
     time.sleep(3)
     r_comm3 = requests.get(f"{JIRA_URL}/rest/api/2/issue/{ISSUE_KEY}/comment", auth=auth).json()
     comms3 = r_comm3.get("comments", [])
-    stage7_card = next((c for c in comms3 if "[Этап 7 из 7]" in c["body"]), None)
+    stage7_card = next((c for c in comms3 if "[Этап 7 из 8]" in c["body"]), None)
     if stage7_card:
         break
 

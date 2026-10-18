@@ -1313,12 +1313,32 @@ const QASE = {
 }
 
 const qaseCases = []
+const suiteTags = ['smoke', 'regress', 'regression', 'fast-regression', 'full-regression']
+let validDesignCasesCount = 0
+const droppedCases = []
+
 for (const c of cases) {
+  // 1. Проверка наличия флага автоматизации
+  const autoType = isBackend ? 'to-be-automated' : (c.automation || null)
+  if (!autoType || !['to-be-automated', 'manual', 'automated'].includes(autoType)) {
+    droppedCases.push({ title: c.title, reason: 'Отсутствует обязательный флаг автоматизации' })
+    continue // Кейсы без флага автоматизации отсекаются
+  }
+
+  // 2. Проверка наличия обязательных атрибутов (Priority, Smoke/Regress tags)
+  const caseTags = (c.tags || []).map(t => String(t).toLowerCase())
+  const hasSuiteTag = caseTags.some(t => suiteTags.includes(t)) || ['smoke', 'regression'].includes(c.type)
+  const hasPriority = Boolean(c.priority)
+
+  if (hasSuiteTag && hasPriority) {
+    validDesignCasesCount++
+  }
+
   const normTitle = c.title.trim().toLowerCase()
   if (existingTitleMap.has(normTitle)) {
     continue
   }
-  const autoType = isBackend ? 'to-be-automated' : (c.automation || 'to-be-automated')
+
   const baseDesc = c.gherkin
     ? `${c.description}\n\n*BDD Gherkin Scenario:*\n\`\`\`gherkin\n${c.gherkin}\n\`\`\`\n\nJira: ${ctx.issueKey}\nCovers: ${(c.covers || []).join(', ')}`
     : `${c.description}\n\nJira: ${ctx.issueKey}\nCovers: ${(c.covers || []).join(', ')}`
@@ -1349,7 +1369,10 @@ for (const c of cases) {
 
   qaseCases.push(payload)
 }
+
 const hasNewCases = qaseCases.length > 0
+const testDesignIntegrity = cases.length > 0 ? (validDesignCasesCount / cases.length) : 1.0
+const designGatePassed = testDesignIntegrity >= 0.90
 
 let kindTitle = 'Frontend'
 if (kind === 'backend') kindTitle = 'Backend'
@@ -1364,7 +1387,7 @@ const manualCount = cases.length - autoCount
 const autoPercent = Math.round((autoCount / cases.length) * 100)
 
 const lines = []
-lines.push(`h2. 🧪 [Этап 3 из 7] Реестр тест-кейсов (BDD): ${kindTitle} (${ctx.issueKey})`)
+lines.push(`h2. 🧪 [Этап 3 из 8] Реестр тест-кейсов (BDD): ${kindTitle} (${ctx.issueKey})`)
 lines.push('')
 lines.push('*Статус:* Спроектированы и переданы на согласование (Quality Gate 1).')
 lines.push(`*Целевая папка в Qase TMS:* 📂 *${esc(featTitle)}* ➔ 📁 *${esc(modTitle)}*`)
@@ -1408,7 +1431,7 @@ function generateRtmComment (ctx, cases, kind) {
   const autoPercent = Math.round((autoCount / cases.length) * 100)
 
   const lines = []
-  lines.push(`h2. 📊 [Этап 4 из 7] Матрица трассируемости требований (RTM): ${kindTitle} (${ctx.issueKey})`)
+  lines.push(`h2. 📊 [Этап 4 из 8] Матрица трассируемости требований (RTM): ${kindTitle} (${ctx.issueKey})`)
   lines.push('')
   lines.push('*Статус покрытия:* (/) *100% ПОКРЫТО (Full Coverage)*')
   lines.push(`*Всего бизнес-критериев приемки (AC):* ${isStory ? '8 (AC-01 .. AC-08) сквозных сценариев' : (isTask ? '4 базовых технических требования' : (isBackend ? '8 (AC-01 .. AC-08) + 7 API эндпоинтов' : '8 (AC-01 .. AC-08) + 10 UI требований'))}`)
@@ -1490,4 +1513,36 @@ function generateRtmComment (ctx, cases, kind) {
 const casesReport = lines.join('\n')
 const rtmCommentBody = generateRtmComment(ctx, cases, kind)
 
-return [{ json: { issueKey: ctx.issueKey, kind: ctx.kind, cases, qaseCases, hasNewCases, casesReport, rtmCommentBody } }]
+const existingComments = ($('Jira: Загрузить данные задачи').first().json.fields?.comment?.comments) || []
+const stage3 = existingComments.find(c => c.body && c.body.includes('[Этап 3 из'))
+const stage4 = existingComments.find(c => c.body && c.body.includes('[Этап 4 из'))
+const jiraBase = 'https://romeo-timony.atlassian.net'
+
+const casesMethod = stage3 ? 'PUT' : 'POST'
+const casesUrl = stage3
+  ? `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment/${stage3.id}`
+  : `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment`
+
+const rtmMethod = stage4 ? 'PUT' : 'POST'
+const rtmUrl = stage4
+  ? `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment/${stage4.id}`
+  : `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment`
+
+return [{
+  json: {
+    issueKey: ctx.issueKey,
+    kind: ctx.kind,
+    cases,
+    qaseCases,
+    hasNewCases,
+    testDesignIntegrity,
+    designGatePassed,
+    droppedCases,
+    casesReport,
+    rtmCommentBody,
+    casesMethod,
+    casesUrl,
+    rtmMethod,
+    rtmUrl
+  }
+}]

@@ -1,0 +1,40 @@
+{
+  "investMap": {
+    "I": [
+      "C03"
+    ],
+    "N": [
+      "C07"
+    ],
+    "V": [
+      "C02"
+    ],
+    "E": [
+      "C05"
+    ],
+    "S": [
+      "C01",
+      "C08"
+    ],
+    "T": [
+      "C04",
+      "C06"
+    ]
+  },
+  "suiteTags": [
+    "smoke",
+    "regress",
+    "regression",
+    "fast-regression",
+    "full-regression"
+  ],
+  "suiteTypes": [
+    "smoke",
+    "regression"
+  ],
+  "automationFlags": [
+    "to-be-automated",
+    "manual",
+    "automated"
+  ]
+}

@@ -25,3 +25,6 @@ logs/
 n8n_execution.json
 data/*.db
 .worktrees/
+scratch/
+scratch_*.py
+github_logs.txt

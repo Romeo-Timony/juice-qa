@@ -6,15 +6,22 @@ import requests
 import sqlite3
 import subprocess
 import sys
+import shutil
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
+
+from qaops import idempotency  # noqa: E402
+from qaops.config import settings as qaops_settings  # noqa: E402
+from qaops.jira import comment_once, transition_once  # noqa: E402
+from qaops.observability import trace  # noqa: E402
 
 # --- Настройка системы логирования ---
 LOG_DIR = BASE_DIR / "logs"
@@ -29,12 +36,10 @@ formatter = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# Вывод в консоль
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# Вывод в файл с ротацией (максимум 5 файлов по 5 МБ)
 file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=5, encoding="utf-8")
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
@@ -72,13 +77,18 @@ def extract_comment_text(body) -> str:
 
 def is_human_comment(text: str) -> bool:
     t = str(text or "").strip().lower()
+<<<<<<< Updated upstream
     if t.startswith("h1.") or t.startswith("h2.") or t.startswith("h3.") or "этап" in t or "qase" in t or "n8n_execution_id" in t or "{code" in t or "{noformat" in t or "allure" in t or "требования отклонены" in t:
+=======
+    if t.startswith("h1.") or t.startswith("h2.") or t.startswith("h3.") or "[этап " in t or "n8n_execution_id" in t or "{code" in t or "{noformat" in t or "allure report" in t or "требования отклонены" in t:
+>>>>>>> Stashed changes
         return False
     if len(t) > 1000:
         return False
     return True
 
 def is_approval_comment(text: str) -> bool:
+<<<<<<< Updated upstream
     if not is_human_comment(text):
         return False
     t = str(text or "").lower()
@@ -90,6 +100,44 @@ def get_in_progress_issues():
     url = f"{JIRA_URL}/rest/api/3/search/jql"
     # Fetch both "To Do" (10045) and "In Progress" (10046) to catch overrides on rejected DoR
     jql = 'status IN (10045, 10046) AND project = JS ORDER BY updated DESC'
+=======
+    t = str(text or "").lower()
+    if "❤️" in text or "❤" in text or ":heart:" in t:
+        return True
+    if not is_human_comment(text):
+        return False
+    return bool(re.search(r'\b(ок|ok|одобрено|approved|подтверждаю|согласовано)\b', t, re.IGNORECASE))
+
+def extract_delta_requirements(text: str) -> Optional[str]:
+    t = str(text or "").strip()
+    if not is_human_comment(t):
+        return None
+    if re.search(r"(@qa-bot|\[ДОПОЛНЕНИЕ\]|\[QA-AMEND\]|\[ТРЕБОВАНИЯ-ДЕЛЬТА\]|дополнительные требования)", t, re.IGNORECASE):
+        cleaned = re.sub(r"(?i)@qa-bot|\[ДОПОЛНЕНИЕ.*?\]|\[QA-AMEND\]|\[ТРЕБОВАНИЯ-ДЕЛЬТА\]", "", t).strip()
+        return cleaned or t
+    return None
+
+def update_stage_comment_in_jira(issue_key: str, stage_tag: str, new_body: str):
+    """Находит комментарий по тегу этапа (например '[Этап 1 из' или '[Этап 5 из') и обновляет его in-place (PUT)."""
+    comments_url = f"{JIRA_URL}/rest/api/2/issue/{issue_key}/comment"
+    try:
+        res = requests.get(comments_url, auth=(JIRA_EMAIL, JIRA_TOKEN), timeout=15)
+        if res.ok:
+            for c in res.json().get("comments", []):
+                c_body = str(c.get("body", ""))
+                if stage_tag in c_body:
+                    cid = c["id"]
+                    requests.put(f"{comments_url}/{cid}", auth=(JIRA_EMAIL, JIRA_TOKEN), json={"body": new_body}, timeout=15)
+                    logger.info(f"[{issue_key}] 🔄 In-place PUT обновление комментария Jira (ID={cid}, {stage_tag})")
+                    return cid
+    except Exception as e:
+        logger.error(f"Ошибка обновления комментария в Jira: {e}")
+    return None
+
+def get_in_progress_issues():
+    url = f"{JIRA_URL}/rest/api/3/search/jql"
+    jql = 'status IN (10045, 10046, 10048) AND project = JS ORDER BY updated DESC'
+>>>>>>> Stashed changes
     try:
         res = requests.get(url, auth=(JIRA_EMAIL, JIRA_TOKEN), params={"jql": jql, "fields": "comment,labels,summary,status"}, timeout=10)
         res.raise_for_status()
@@ -98,7 +146,7 @@ def get_in_progress_issues():
         logger.error(f"Ошибка связи с API Jira: Не удалось получить задачи. Подробности: {e}")
         return None
 
-# --- Строгий конечный автомат (State Machine) для Telegram-оповещений ---
+# --- Строгий конечный автомат (State Machine) для Telegram-оповещений и Human-in-the-Loop ---
 STATE_IDLE = 0
 STATE_STARTED = 1
 STATE_DOR_REJECTED = 2
@@ -108,37 +156,62 @@ STATE_GATE2_WAITING = 5
 STATE_GATE2_APPROVED = 6
 STATE_CI_RUNNING = 7
 STATE_COMPLETED = 8
+<<<<<<< Updated upstream
+=======
+STATE_PAUSED = 9
+>>>>>>> Stashed changes
 
 class PipelineTracker:
     def __init__(self, issue_key: str):
         self.issue_key = issue_key
         self.state = STATE_IDLE
+        self.resume_state = STATE_IDLE
         self.processed_comment_ids = set()
+        self.sent_notifications = set()
+
+    def pause(self, resume_state: int, reason: str):
+        self.state = STATE_PAUSED
+        self.resume_state = resume_state
+        logger.warning(f"[{self.issue_key}] ⏸️ QAOps: пайплайн на паузе ({reason}). Снимите метку {qaops_settings.paused_label} для продолжения.")
 
     def step(self, issue: dict):
         fields = issue.get("fields", {})
         status_id = fields.get("status", {}).get("id")
         summary = fields.get("summary", "")
         comments = fields.get("comment", {}).get("comments", [])
+        labels = fields.get("labels", []) or []
+
+        if self.state == STATE_PAUSED:
+            if qaops_settings.paused_label in labels:
+                return
+            self.state = self.resume_state
+            logger.info(f"[{self.issue_key}] ▶️ QAOps: метка {qaops_settings.paused_label} снята -> возобновление в состояние {self.state} (нужно новое согласование)")
 
         try:
             from scripts.telegram_notifier import (
                 notify_pipeline_started,
+                notify_dor_rejected,
                 notify_gate1_waiting,
                 notify_gate1_approved,
                 notify_gate2_waiting,
                 notify_gate2_approved,
+                notify_cicd_started,
                 notify_pipeline_completed,
                 notify_error
             )
         except Exception:
             return
 
+<<<<<<< Updated upstream
         # Сброс состояния, если комментарии полностью очищены
+=======
+        # При полной очистке комментариев сбрасываем трекер в начальное состояние
+>>>>>>> Stashed changes
         if len(comments) == 0:
             if self.state != STATE_IDLE:
                 self.state = STATE_IDLE
                 self.processed_comment_ids.clear()
+<<<<<<< Updated upstream
                 logger.info(f"[{self.issue_key}] 🔄 Комментарии удалены -> сброс трекера в IDLE")
             return
 
@@ -152,12 +225,18 @@ class PipelineTracker:
             elif status_id == "10045" and has_dor_rejection:
                 self.state = STATE_DOR_REJECTED
                 logger.info(f"[{self.issue_key}] Восстановлено состояние STATE_DOR_REJECTED из комментариев")
+=======
+                self.sent_notifications.clear()
+                logger.info(f"[{self.issue_key}] 🔄 Задача очищена -> сброс трекера в STATE_IDLE")
+            return
+>>>>>>> Stashed changes
 
-        # Сортируем комментарии строго хронологически по возрастанию ID
         sorted_comments = sorted(comments, key=lambda x: int(x.get("id", 0)))
-
+        
+        # 0. Проверяем наличие дельта-комментариев на доработку требований (@qa-bot [ДОПОЛНЕНИЕ])
         for c in sorted_comments:
             cid = c.get("id")
+<<<<<<< Updated upstream
             body = extract_comment_text(c.get("body", ""))
 
             # 1.5: Ошибка DoR Gate (STARTED -> DOR_REJECTED)
@@ -256,23 +335,236 @@ class PipelineTracker:
                         except Exception as tr_err:
                             logger.error(f"Ошибка перевода задачи {self.issue_key} в 10048: {tr_err}")
                     continue
+=======
+            if cid not in self.processed_comment_ids:
+                body = extract_comment_text(c.get("body", ""))
+                delta_text = extract_delta_requirements(body)
+                if delta_text:
+                    self.processed_comment_ids.add(cid)
+                    author = (c.get("author") or {}).get("displayName", "QA Lead")
+                    with idempotency.idempotent("jira.delta_comment", self.issue_key, str(cid)) as guard:
+                        if guard.duplicate:
+                            logger.info(f"[{self.issue_key}] ♻️ Дельта-комментарий ID={cid} уже был обработан ранее — повторная обработка заблокирована.")
+                        else:
+                            logger.info(f"[{self.issue_key}] ➕ Обработка новых дельта-требований (ID={cid}): {delta_text[:80]}")
+                            try:
+                                from scripts.qaops_delta_refine import process_delta_requirements
+                                res = process_delta_requirements(self.issue_key, delta_text, author=author)
+                                guard.complete(res)
+                            except Exception as de:
+                                logger.error(f"[{self.issue_key}] Ошибка обработки дельта-требований: {de}", exc_info=True)
 
-            # Алерты об ошибках
-            if ("(x)" in body or "ТРЕБОВАНИЯ НЕ ПРИНЯТЫ" in body or "ОШИБКА" in body) and cid not in self.processed_comment_ids:
-                self.processed_comment_ids.add(cid)
-                notify_error(self.issue_key, "Jira Event", body.splitlines()[0][:200])
+        # 1. Проверяем наличие DoR отказа
+        dor_reject_comment = next((c for c in sorted_comments if "ТРЕБОВАНИЯ ОТКЛОНЕНЫ" in extract_comment_text(c.get("body", "")).upper()), None)
+        has_override = "[DOR_OVERRIDE_APPROVED]" in summary
 
-    def mark_ci_running(self, branch: str):
-        if self.state in (STATE_GATE2_WAITING, STATE_GATE2_APPROVED):
-            self.state = STATE_CI_RUNNING
-            try:
-                from scripts.telegram_notifier import notify_cicd_started
-                notify_cicd_started(self.issue_key, branch=branch)
-            except Exception as e:
-                logger.error(f"Telegram notify error: {e}")
+        if self.state == STATE_IDLE:
+            if status_id == "10046" and not dor_reject_comment:
+                self.state = STATE_STARTED
+                if "started" not in self.sent_notifications:
+                    notify_pipeline_started(self.issue_key, summary)
+                    self.sent_notifications.add("started")
+            elif dor_reject_comment and not has_override:
+                self.state = STATE_DOR_REJECTED
+                if "dor_rejected" not in self.sent_notifications:
+                    body = extract_comment_text(dor_reject_comment.get("body", ""))
+                    score_match = re.search(r"Итоговый балл:\s*(\d+)%", body)
+                    score = int(score_match.group(1)) if score_match else 0
+                    notify_dor_rejected(self.issue_key, score=score, blockers="C06 — Не описано поведение системы при ошибках")
+                    self.sent_notifications.add("dor_rejected")
+            elif has_override:
+                self.state = STATE_STARTED
+
+        # 1.5. Ручное переопределение DoR: пользователь написал "ok" / "❤️"
+        if self.state == STATE_DOR_REJECTED and not has_override and dor_reject_comment:
+            for c in sorted_comments:
+                cid = c.get("id")
+                if int(cid) > int(dor_reject_comment.get("id", 0)):
+                    body = extract_comment_text(c.get("body", ""))
+                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                        self.processed_comment_ids.add(cid)
+                        logger.info(f"[{self.issue_key}] 🚀 Ручное переопределение DoR: '{body.strip()[:60]}'.")
+                        
+                        # In-place PUT обновление комментария [Этап 1 из 8]
+                        st1_body = extract_comment_text(dor_reject_comment.get("body", ""))
+                        updated_st1 = st1_body.replace("(x) ТРЕБОВАНИЯ ОТКЛОНЕНЫ (DoR FAIL)", "(/) ТРЕБОВАНИЯ ПРИНЯТЫ (DoR Override by QA Lead)")
+                        updated_st1 = updated_st1.replace("(x) Задача возвращена в статус «К выполнению».", "(/) Требования согласованы QA Lead (Ручное переопределение).")
+                        update_stage_comment_in_jira(self.issue_key, "[Этап 1 из", updated_st1)
+>>>>>>> Stashed changes
+
+                        # Добавляем маркер [DOR_OVERRIDE_APPROVED] в summary
+                        new_summary = summary if "[DOR_OVERRIDE_APPROVED]" in summary else summary + " [DOR_OVERRIDE_APPROVED]"
+                        requests.put(f"{JIRA_URL}/rest/api/2/issue/{self.issue_key}", auth=(JIRA_EMAIL, JIRA_TOKEN), json={"fields": {"summary": new_summary}}, timeout=10)
+                        
+                        # Переводим в «В работе» (10046)
+                        transition_once(self.issue_key, "21", scope_key=f"dor-override:{cid}")
+                        
+                        self.state = STATE_STARTED
+                        if "started" not in self.sent_notifications:
+                            notify_pipeline_started(self.issue_key, summary)
+                            self.sent_notifications.add("started")
+                        logger.info(f"[{self.issue_key}] 🚀 Задача переведена в «В работе». n8n запускает этапы 1-5.")
+                        break
+
+        # 2. Остановка на Quality Gate 1 (Этап 5)
+        stage5_comment = next((c for c in sorted_comments if "[Этап 5 из" in extract_comment_text(c.get("body", ""))), None)
+        if stage5_comment and self.state in (STATE_STARTED, STATE_DOR_REJECTED):
+            self.state = STATE_GATE1_WAITING
+            if "gate1_waiting" not in self.sent_notifications:
+                notify_gate1_waiting(self.issue_key, 12, 12)
+                self.sent_notifications.add("gate1_waiting")
+                logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 1 (Human-in-the-Loop пауза)")
+
+        # 3. Согласование Quality Gate 1: пользователь написал "ok" / "❤️"
+        if self.state == STATE_GATE1_WAITING and stage5_comment:
+            for c in sorted_comments:
+                cid = c.get("id")
+                if int(cid) > int(stage5_comment.get("id", 0)):
+                    body = extract_comment_text(c.get("body", ""))
+                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                        self.processed_comment_ids.add(cid)
+                        self.state = STATE_GATE1_APPROVED
+                        if "gate1_approved" not in self.sent_notifications:
+                            notify_gate1_approved(self.issue_key, approver="QA Lead")
+                            self.sent_notifications.add("gate1_approved")
+                        logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о согласовании Gate 1 ({body.strip()[:60]})")
+
+                        # In-place PUT обновление карточки Gate 1 на ОДОБРЕНО
+                        st5_body = extract_comment_text(stage5_comment.get("body", ""))
+                        updated_st5 = st5_body.replace("⏳ *ОЖИДАЕТ СОГЛАСОВАНИЯ QA LEAD*", "(/) *ОДОБРЕНО*")
+                        updated_st5 = updated_st5.replace("Ожидает проверки QA Lead", "QA Lead (Human in the Loop)")
+                        update_stage_comment_in_jira(self.issue_key, "[Этап 5 из", updated_st5)
+
+                        # Ставим метки в Jira
+                        from hitl_review_gate import add_jira_label
+                        add_jira_label(self.issue_key, "qa-ready-for-autotests")
+
+                        # Генерация реальных тестов строго по профилю задачи (backend vs frontend)
+                        task_kind = "frontend" if re.search(r"\[\s*frontend\s*\]|frontend|angular|ui\b", summary, re.I) else "backend"
+                        with trace("pipeline.gate1_to_gate2", issue_key=self.issue_key, input={"kind": task_kind}, tags=["daemon"]) as tr:
+                            from qaops.seams import check_issue_contract, run_design_seam
+                            from scaffold_dynamic import fetch_qase_cases, generate_tests
+
+                            if not check_issue_contract(self.issue_key):
+                                self.pause(STATE_GATE1_WAITING, "Seam 1: нарушен контракт задачи")
+                                break
+                            if not run_design_seam(self.issue_key, fetch_qase_cases(self.issue_key)):
+                                self.pause(STATE_GATE1_WAITING, "Seam 2: Test Design Integrity ниже порога")
+                                break
+
+                            logger.info(f"[{self.issue_key}] 🛠️ Запуск генерации автотестов (scaffold_dynamic, kind={task_kind})...")
+                            generate_tests(self.issue_key, kind=task_kind, target_dir=BASE_DIR / "tests" / "review")
+
+                            # Seam 3 (AST + ruff + pytest --collect-only) -> AI-аудит -> [Этап 6 из 8] с Evidence Pack
+                            logger.info(f"[{self.issue_key}] 🔍 Статический гейт и AI-аудит автотестов (Gate 2 Staging Review)...")
+                            from hitl_review_gate import run_staging_review
+                            review_ok = run_staging_review(self.issue_key)
+                            tr.output = {"review_ok": review_ok}
+                        if not review_ok:
+                            self.pause(STATE_GATE1_WAITING, "Seam 3: код автотестов не собирается или отклонён аудитором")
+                            break
+
+                        # Переводим в состояние ожидания согласования Gate 2
+                        self.state = STATE_GATE2_WAITING
+                        if "gate2_waiting" not in self.sent_notifications:
+                            notify_gate2_waiting(self.issue_key, score=95, verdict="ACCEPT", summary="Код автотестов успешно прошел независимый аудит.")
+                            self.sent_notifications.add("gate2_waiting")
+                            logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 2 (Human-in-the-Loop пауза)")
+                        break
+
+        # 4. Согласование Quality Gate 2: пользователь написал "ok" / "❤️"
+        stage6_comment = next((c for c in sorted_comments if "[Этап 6 из" in extract_comment_text(c.get("body", ""))), None)
+        if self.state == STATE_GATE2_WAITING and stage6_comment:
+            for c in sorted_comments:
+                cid = c.get("id")
+                if int(cid) > int(stage6_comment.get("id", 0)):
+                    body = extract_comment_text(c.get("body", ""))
+                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                        self.processed_comment_ids.add(cid)
+                        self.state = STATE_GATE2_APPROVED
+                        if "gate2_approved" not in self.sent_notifications:
+                            notify_gate2_approved(self.issue_key, approver="QA Lead")
+                            self.sent_notifications.add("gate2_approved")
+                        logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о согласовании Gate 2 ({body.strip()[:60]})")
+
+                        # Промоушн файлов автотестов в боевую папку и публикация Этапа 7
+                        logger.info(f"[{self.issue_key}] 🚀 Промоушн автотестов в репозиторий (promote_files)...")
+                        from hitl_review_gate import promote_files
+                        promote_files("QA Lead", self.issue_key)
+
+                        # Создаем ветку и пушим в репозиторий
+                        branch_name = f"qa/{self.issue_key.lower()}"
+                        wt_dir = BASE_DIR.parent / ".worktrees" / f"qa-{self.issue_key.lower()}"
+                        wt_dir.parent.mkdir(parents=True, exist_ok=True)
+                        promoted_backend = sorted((BASE_DIR / "tests" / "backend").glob(f"*{self.issue_key.lower().replace('-', '')}*.py"))
+                        promoted_frontend = sorted((BASE_DIR / "tests" / "frontend").glob(f"*{self.issue_key.lower().replace('-', '')}*.py"))
+                        promoted = promoted_backend + promoted_frontend
+                        content_digest = idempotency.make_key("files", *[(p.name, p.read_text(encoding="utf-8")) for p in promoted])
+                        try:
+                            with idempotency.idempotent("git.push", self.issue_key, branch_name, content_digest) as push_guard:
+                                if push_guard.duplicate:
+                                    logger.info(f"[{self.issue_key}] ♻️ Идентичный набор тестов уже запушен в {branch_name} — повторный push заблокирован.")
+                                else:
+                                    subprocess.run(["git", "fetch", "qa"], cwd=BASE_DIR.parent, check=True)
+                                    if wt_dir.exists():
+                                        subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR.parent, capture_output=True)
+                                    subprocess.run(["git", "worktree", "add", "-B", branch_name, str(wt_dir), "qa/main"], cwd=BASE_DIR.parent, check=True)
+
+                                    if promoted_backend:
+                                        (wt_dir / "tests" / "backend").mkdir(parents=True, exist_ok=True)
+                                        for f in promoted_backend:
+                                            shutil.copy(f, wt_dir / "tests" / "backend" / f.name)
+                                    if promoted_frontend:
+                                        (wt_dir / "tests" / "frontend").mkdir(parents=True, exist_ok=True)
+                                        for f in promoted_frontend:
+                                            shutil.copy(f, wt_dir / "tests" / "frontend" / f.name)
+
+                                    subprocess.run(["git", "add", "tests/"], cwd=wt_dir, check=False)
+                                    subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {self.issue_key}"], cwd=wt_dir, check=False)
+                                    push_res = subprocess.run(["git", "push", "-u", "--force", "qa", branch_name], cwd=wt_dir, capture_output=True, text=True)
+                                    subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR.parent, capture_output=True)
+                                    if push_res.returncode != 0:
+                                        raise RuntimeError(push_res.stderr[-500:])
+                                    push_guard.complete({"branch": branch_name})
+                                    logger.info(f"[{self.issue_key}] ✅ Ветка {branch_name} успешно отправлена в репозиторий.")
+                        except Exception as ge:
+                            logger.error(f"Git push error: {ge}")
+
+                        self.state = STATE_CI_RUNNING
+                        if "cicd_started" not in self.sent_notifications:
+                            notify_cicd_started(self.issue_key, branch=branch_name)
+                            self.sent_notifications.add("cicd_started")
+                            logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о старте CI/CD")
+                        break
+
+        # 5. Завершение прогона в GitHub Actions (Этап 8)
+        stage8_comment = next((c for c in sorted_comments if "[Этап 8 из 8]" in extract_comment_text(c.get("body", ""))), None)
+        if self.state in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
+            if stage8_comment or status_id == "10048":
+                self.state = STATE_COMPLETED
+                if "completed" not in self.sent_notifications:
+                    is_success = "УСПЕШНО" in extract_comment_text(stage8_comment.get("body", "") if stage8_comment else "") or status_id == "10048"
+                    notify_pipeline_completed(self.issue_key, success=is_success, summary="Все автотесты успешно выполнены в GitHub Actions, сформирован отчет Allure.")
+                    self.sent_notifications.add("completed")
+                    logger.info(f"[{self.issue_key}] 🏁 Пайплайн завершен, отправлено итоговое Telegram-уведомление.")
+                if status_id != "10048":
+                    stage8_id = stage8_comment.get("id") if stage8_comment else "status"
+                    if transition_once(self.issue_key, "31", scope_key=f"stage8:{stage8_id}"):
+                        logger.info(f"[{self.issue_key}] 🏁 Задача переведена в «Автотесты пройдены» (10048)")
+                if "release_quality" not in self.sent_notifications:
+                    try:
+                        from qaops.metrics import format_jira, release_quality
+                        report = release_quality(self.issue_key)
+                        body = "\n".join(["h3. 🏁 QAOps: Итоговое решение Go/No-Go по релизу", *format_jira(report)])
+                        comment_once(self.issue_key, body, scope_key=f"release-quality:{stage8_comment.get('id') if stage8_comment else 'status'}")
+                        logger.info(f"[{self.issue_key}] 📈 Индекс качества релиза: {report['release_quality_index']} ({report['decision']})")
+                    except Exception as qe:
+                        logger.warning(f"[{self.issue_key}] Индекс качества релиза не рассчитан: {qe}")
+                    self.sent_notifications.add("release_quality")
 
 trackers: dict = {}
 
+<<<<<<< Updated upstream
 
 
 def get_latest_execution_id(comments: list):
@@ -357,13 +649,13 @@ def git_commit_and_push(issue_key: str, branch_name: str) -> bool:
         logger.error(f"Непредвиденная ошибка в Git-операциях: {e}", exc_info=True)
     return False
 
+=======
+>>>>>>> Stashed changes
 def daemon_loop():
     logger.info("🚀 Запуск QA Агента-демона (Jira Poller). Ожидание задач...")
     
     if str(BASE_DIR / "scripts") not in sys.path:
         sys.path.insert(0, str(BASE_DIR / "scripts"))
-
-    announced_pending = set()
         
     while True:
         try:
@@ -374,138 +666,21 @@ def daemon_loop():
 
             active_keys = {issue["key"] for issue in issues}
             for k in list(trackers.keys()):
-                if k not in active_keys and trackers[k].state not in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
-                    logger.info(f"[{k}] 🧹 Задача больше не в «В работе» -> удаление трекера из памяти")
+                if k not in active_keys and trackers[k].state not in (STATE_GATE2_APPROVED, STATE_CI_RUNNING, STATE_PAUSED):
+                    logger.info(f"[{k}] 🧹 Задача больше не в очереди -> удаление трекера из памяти")
                     del trackers[k]
 
             for issue in issues:
                 issue_key = issue["key"]
-                fields = issue.get("fields", {})
-                status_id = fields.get("status", {}).get("id")
-
                 tracker = trackers.setdefault(issue_key, PipelineTracker(issue_key))
                 try:
                     tracker.step(issue)
                 except Exception as te:
-                    logger.warning(f"Ошибка при обработке Telegram-оповещений для {issue_key}: {te}")
+                    logger.warning(f"Ошибка при обработке для {issue_key}: {te}", exc_info=True)
 
-                # Test generation and Git push is only for tasks currently in progress (10046)
-                if status_id != "10046":
-                    continue
-
-                labels = fields.get("labels", [])
-                # If already labeled as autotests created, do not re-run
-                if "qa-autotests-created" in labels:
-                    continue
-
-                comments = fields.get("comment", {}).get("comments", [])
-                stage_7_body = None
-                for c in comments:
-                    body_text = extract_comment_text(c.get("body", ""))
-                    if "Автотесты созданы и добавлены в проект" in body_text:
-                        stage_7_body = body_text
-                        break
-
-                if stage_7_body:
-                    exec_id = get_latest_execution_id(comments)
-                    if exec_id:
-                        logger.info(f"Найден n8n_execution ID: {exec_id} для {issue_key}")
-                    else:
-                        logger.info("N8N_EXECUTION_ID не указан в комментариях Jira")
-
-                    logger.info(f"🎯 Обнаружен успешный пайплайн n8n для {issue_key}! Начинаем локальную генерацию тестов...")
-                    try:
-                        branch_name = f"qa/{issue_key.lower()}"
-                        wt_dir = BASE_DIR / ".worktrees" / f"qa-{issue_key.lower()}"
-                        wt_dir.parent.mkdir(parents=True, exist_ok=True)
-                        logger.info(f"Подготовка изолированного Git Worktree {wt_dir} для {branch_name}...")
-                        subprocess.run(["git", "fetch", "qa"], cwd=BASE_DIR.parent, check=True)
-                        if wt_dir.exists():
-                            subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR.parent, capture_output=True)
-
-                        add_res = subprocess.run(["git", "worktree", "add", "-B", branch_name, str(wt_dir), "qa/main"], cwd=BASE_DIR.parent, capture_output=True, text=True)
-                        if add_res.returncode != 0:
-                            logger.error(f"Не удалось создать worktree: {add_res.stderr}")
-                            continue
-
-                        execution_file = wt_dir / "n8n_execution.json"
-                        if exec_id:
-                            with open(execution_file, "w") as f:
-                                json.dump({"executionId": exec_id}, f)
-                            logger.info(f"Сохранен n8n_execution.json с ID: {exec_id} в worktree")
-
-                        summary = str(fields.get("summary", "")).lower()
-                        is_frontend = ("tests/frontend" in stage_7_body and "tests/backend" not in stage_7_body) or "frontend" in summary or issue_key.upper() == "JS-16"
-                        kind = "frontend" if is_frontend else ("backend" if "backend" in summary else "all")
-
-                        logger.info(f"Определен тип задачи: {kind}. Генерация в изолированном Worktree...")
-                        from scaffold_dynamic import generate_tests
-                        generate_tests(issue_key, kind=kind, target_dir=wt_dir)
-                        update_sqlite(issue_key)
-
-                        # Git in worktree
-                        subprocess.run(["git", "add", "tests/"], cwd=wt_dir, check=False)
-                        subprocess.run(["git", "add", "-f", "n8n_execution.json"], cwd=wt_dir, check=False)
-                        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=wt_dir).returncode == 0:
-                            logger.info("Нет изменений для коммита в worktree.")
-                            subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR, capture_output=True)
-                            continue
-
-                        logger.info("Создание коммита в worktree...")
-                        subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {issue_key}"], cwd=wt_dir, check=True)
-                        logger.info(f"Пуш ветки {branch_name} на удаленный сервер из worktree...")
-                        push_res = subprocess.run(["git", "push", "-u", "--force", "qa", branch_name], cwd=wt_dir, capture_output=True, text=True)
-
-                        # Clean up worktree
-                        subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR.parent, capture_output=True)
-                        logger.info(f"Worktree {wt_dir} успешно очищен.")
-
-                        if push_res.returncode != 0:
-                            logger.error(f"Ошибка пуша из worktree: {push_res.stderr.strip()}")
-                            try:
-                                from scripts.telegram_notifier import notify_error
-                                notify_error(issue_key, "Git Push", push_res.stderr.strip())
-                            except Exception:
-                                pass
-                            continue
-
-                        logger.info("✅ Файлы успешно закоммичены и отправлены в репозиторий через Worktree!")
-                        tracker.mark_ci_running(branch_name)
-                        from scripts.hitl_review_gate import add_jira_label
-                        add_jira_label(issue_key, "qa-autotests-created")
-                        logger.info(f"✅ Полный цикл для {issue_key} успешно завершен.")
-                    except subprocess.CalledProcessError as e:
-                        err_text = e.stderr if hasattr(e, 'stderr') else str(e)
-                        logger.error(f"Ошибка выполнения Git-команды для {issue_key}: {err_text}")
-                        try:
-                            from scripts.telegram_notifier import notify_error
-                            notify_error(issue_key, "Git Operations", err_text)
-                        except Exception:
-                            pass
-                    except ImportError as e:
-                        logger.error(f"Ошибка импорта модулей генерации: {e}")
-                    except Exception as ex:
-                        logger.error(f"Критическая ошибка при генерации или обработке тестов для {issue_key}: {ex}", exc_info=True)
-                        try:
-                            from scripts.telegram_notifier import notify_error
-                            notify_error(issue_key, "Daemon Execution", str(ex))
-                        except Exception:
-                            pass
-
-            # Отслеживание задач в ожидании CI/CD для фиксации перехода в «Автотесты пройдены»
-            for key, t in list(trackers.items()):
-                if t.state in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
-                    try:
-                        r = requests.get(f"{JIRA_URL}/rest/api/2/issue/{key}", auth=(JIRA_EMAIL, JIRA_TOKEN), timeout=10)
-                        if r.ok:
-                            t.step(r.json())
-                    except Exception:
-                        pass
-                            
         except Exception as e:
             logger.error(f"Глобальная ошибка в цикле поллинга Jira: {e}", exc_info=True)
 
-            
         time.sleep(10)
 
 if __name__ == "__main__":

@@ -1,0 +1,3 @@
+@echo off
+echo Starting ngrok tunnel to remote n8n server (201.34.147.33)...
+ngrok http --domain=stylish-mary-bluebelled.ngrok-free.dev 201.34.147.33:5678

@@ -31,15 +31,16 @@ for (const item of $input.all()) {
     continue
   }
 
-  // Case C: From MCP Trigger (Direct execution)
-  if (json.issueKey && typeof json.issueKey === 'string') {
+  // Case C: From Direct Trigger / Webhook (top-level or inside body)
+  const directKey = json.issueKey || (json.body && json.body.issueKey)
+  if (directKey && typeof directKey === 'string') {
     out.push({
       json: {
-        issueKey: json.issueKey,
-        issueId: json.issueId || 'unknown',
+        issueKey: directKey,
+        issueId: json.issueId || (json.body && json.body.issueId) || 'unknown',
         fromStatus: 'К выполнению',
         toStatus: 'В работе',
-        actor: json.actor || 'mcp-agent',
+        actor: json.actor || (json.body && json.body.actor) || 'mcp-agent',
         receivedAt: new Date().toISOString(),
         config: CONFIG
       }

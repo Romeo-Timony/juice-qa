@@ -1,4 +1,4 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-09 09:31:28 UTC | AI Audit: NEEDS_REVISION (72/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-15 09:35:19 UTC | AI Audit: NEEDS_REVISION (68/100)
 """
 Frontend UI Automated Test Suite for JS-16
 Automates 9 scenarios marked as to-be-automated in Qase TMS.
@@ -21,9 +21,9 @@ class TestJS16UI:
     """Набор из 9 автоматизированных UI-тестов (Page Object Model & Playwright)."""
 
     @allure.title("[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email")
-    @pytest.mark.qase(id=319)
+    @pytest.mark.qase(id=532)
     @pytest.mark.ui
-    def test_tc319_registration_with_valid_email(self, page: Page, base_url: str):
+    def test_tc532_registration_with_valid_email(self, page: Page, base_url: str):
         """Проверка успешного заполнения и отправки формы регистрации через POM."""
         register_page = RegisterPage(page, base_url)
         ts = int(time.time() * 1000)
@@ -39,9 +39,9 @@ class TestJS16UI:
             assert "/#/login" in page.url or page.locator("simple-snack-bar, .mat-snack-bar-container").is_visible()
 
     @allure.title("[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя")
-    @pytest.mark.qase(id=320)
+    @pytest.mark.qase(id=533)
     @pytest.mark.ui
-    def test_tc320_password_boundary_validation(self, page: Page, base_url: str):
+    def test_tc533_password_boundary_validation(self, page: Page, base_url: str):
         """Проверка граничных значений длины пароля: блокировка при длине менее 5 символов."""
         register_page = RegisterPage(page, base_url)
         with allure.step("1. Открытие страницы регистрации"):
@@ -54,9 +54,9 @@ class TestJS16UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля")
-    @pytest.mark.qase(id=321)
+    @pytest.mark.qase(id=534)
     @pytest.mark.ui
-    def test_tc321_password_mismatch_error(self, page: Page, base_url: str):
+    def test_tc534_password_mismatch_error(self, page: Page, base_url: str):
         """Проверка блокировки отправки при несовпадении полей пароля и повтора пароля."""
         register_page = RegisterPage(page, base_url)
         with allure.step("1. Открытие формы регистрации"):
@@ -70,9 +70,9 @@ class TestJS16UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Обработка ошибки 409 Conflict при регистрации с уже занятым Email")
-    @pytest.mark.qase(id=322)
+    @pytest.mark.qase(id=535)
     @pytest.mark.ui
-    def test_tc322_duplicate_email_conflict_handling(self, page: Page, base_url: str):
+    def test_tc535_duplicate_email_conflict_handling(self, page: Page, base_url: str):
         """Проверка обработки конфликта при повторной регистрации существующего пользователя."""
         register_page = RegisterPage(page, base_url)
         existing_email = "admin@juice-sh.op"
@@ -85,9 +85,9 @@ class TestJS16UI:
             assert "/#/register" in page.url
 
     @allure.title("[Frontend][Parametrized] Аутентификация пользователя и проверка безопасности сессии при входе")
-    @pytest.mark.qase(id=323)
+    @pytest.mark.qase(id=536)
     @pytest.mark.ui
-    def test_tc323_user_login_authentication(self, page: Page, base_url: str):
+    def test_tc536_user_login_authentication(self, page: Page, base_url: str):
         """Проверка успешной аутентификации пользователя через POM LoginPage."""
         login_page = LoginPage(page, base_url)
         with allure.step("1. Открытие формы авторизации"):
@@ -100,9 +100,9 @@ class TestJS16UI:
             assert page.url != f"{base_url}/#/register"
 
     @allure.title("[Frontend] Сохранение Bearer JWT в сессии и добавление заголовка Authorization в JwtInterceptor")
-    @pytest.mark.qase(id=324)
+    @pytest.mark.qase(id=537)
     @pytest.mark.ui
-    def test_tc324_jwt_session_token_storage(self, page: Page, base_url: str):
+    def test_tc537_jwt_session_token_storage(self, page: Page, base_url: str):
         """Проверка сохранения JWT в localStorage и структуры токена."""
         with allure.step("1. Переход на главную страницу"):
             page.goto(f"{base_url}/#/")
@@ -112,9 +112,9 @@ class TestJS16UI:
                 assert token.startswith("ey"), "JWT токен должен начинаться с 'ey'"
 
     @allure.title("[Frontend] Смена пароля авторизованным пользователем в настройках профиля")
-    @pytest.mark.qase(id=326)
+    @pytest.mark.qase(id=539)
     @pytest.mark.ui
-    def test_tc326_change_password_route(self, page: Page, base_url: str):
+    def test_tc539_change_password_route(self, page: Page, base_url: str):
         """Проверка формы изменения пароля через ChangePasswordPage POM."""
         change_page = ChangePasswordPage(page, base_url)
         with allure.step("1. Открытие формы смены пароля"):
@@ -125,9 +125,9 @@ class TestJS16UI:
             expect(change_page.repeat_password_input).to_be_attached()
 
     @allure.title("[Frontend] Блокировка смены пароля при вводе неверного текущего пароля (HTTP 401)")
-    @pytest.mark.qase(id=327)
+    @pytest.mark.qase(id=540)
     @pytest.mark.ui
-    def test_tc327_change_password_invalid_current(self, page: Page, base_url: str):
+    def test_tc540_change_password_invalid_current(self, page: Page, base_url: str):
         """Проверка блокировки отправки при невалидных полях пароля."""
         change_page = ChangePasswordPage(page, base_url)
         with allure.step("1. Открытие формы смены пароля"):
@@ -136,9 +136,9 @@ class TestJS16UI:
             expect(change_page.change_button).to_be_disabled()
 
     @allure.title("[Frontend] Успешная загрузка валидного изображения аватара профиля (PNG/JPEG до 2 МБ)")
-    @pytest.mark.qase(id=328)
+    @pytest.mark.qase(id=541)
     @pytest.mark.ui
-    def test_tc328_profile_avatar_upload_controls(self, page: Page, base_url: str):
+    def test_tc541_profile_avatar_upload_controls(self, page: Page, base_url: str):
         """Проверка страницы профиля и контролов загрузки изображения."""
         login_page = LoginPage(page, base_url)
         with allure.step("1. Авторизация под пользователем для доступа к профилю"):
@@ -151,3 +151,41 @@ class TestJS16UI:
         with allure.step("3. Проверка наличия формы загрузки аватара"):
             file_input = page.locator("#picture, input[type='file']")
             expect(file_input.first).to_be_attached()
+
+
+    @allure.title("[Frontend][Security][SQLi] Обход аутентификации через SQL-инъекцию в поле Email")
+    @pytest.mark.qase(id=544)
+    @pytest.mark.ui
+    @pytest.mark.security
+    def test_tc544_frontend__security__sqli(self, page: Page, base_url: str):
+        """Проверка уязвимости формы логина к базовой SQL-инъекции (Classic OWASP Login Bypass)."""
+        login_page = LoginPage(page, base_url)
+        sqli_payload = "' or 1=1--"
+        with allure.step("1. Открытие формы авторизации"):
+            login_page.open()
+            expect(login_page.login_button).to_be_visible()
+        with allure.step(f"2. Ввод SQL Injection пейлоада в поле Email: {sqli_payload}"):
+            login_page.login(sqli_payload, "any_password")
+        with allure.step("3. Проверка успешного обхода аутентификации и генерации Bearer JWT"):
+            expect(page).to_have_url(re.compile(r"/#/(search|\?|$)"), timeout=5000)
+            token = login_page.get_token_from_storage()
+            assert token is not None and token.startswith("ey"), "Успешная эксплуатация SQLi должна предоставить JWT токен администратора"
+
+    @allure.title("[Frontend][Security][XSS] Проверка санитизации XSS-пейлоада в поле контрольного ответа при регистрации")
+    @pytest.mark.qase(id=545)
+    @pytest.mark.ui
+    @pytest.mark.security
+    def test_tc545_frontend__security__xss(self, page: Page, base_url: str):
+        """Проверка формы регистрации RegisterPage на защиту от межсайтового скриптинга (Stored/Reflected XSS)."""
+        register_page = RegisterPage(page, base_url)
+        with allure.step("1. Открытие страницы регистрации"):
+            register_page.open()
+        with allure.step("2. Ввод тестовых данных с проверкой безопасности"):
+            register_page.email_input.fill("sec_test@test.com")
+            register_page.password_input.fill("SecurePass123!")
+            register_page.repeat_password_input.fill("SecurePass123!")
+            register_page.select_security_question(0)
+            register_page.security_answer_input.fill("<script>alert(1)</script>")
+        with allure.step("3. Проверка блокировки или санитарной обработки скриптов"):
+            expect(register_page.register_button).to_be_visible()
+

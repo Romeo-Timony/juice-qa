@@ -63,6 +63,19 @@ def reset_all():
             comments = c_res.json().get('fields', {}).get('comment', {}).get('comments', [])
             for c in comments:
                 requests.delete(f"{JIRA_URL}/rest/api/3/issue/{key}/comment/{c['id']}", auth=auth)
+
+            # Delete Qase remote links (preserve Confluence / Figma)
+            rl_res = requests.get(f"{JIRA_URL}/rest/api/2/issue/{key}/remotelink", auth=auth)
+            if rl_res.ok and isinstance(rl_res.json(), list):
+                for rl in rl_res.json():
+                    rl_id = rl.get("id")
+                    title = rl.get("object", {}).get("title", "")
+                    url = rl.get("object", {}).get("url", "")
+                    app_name = rl.get("application", {}).get("name", "")
+                    global_id = rl.get("globalId", "")
+                    if any("qase" in str(x).lower() for x in [title, url, app_name, global_id]):
+                        requests.delete(f"{JIRA_URL}/rest/api/2/issue/{key}/remotelink/{rl_id}", auth=auth)
+                        print(f"Deleted Qase remote link {rl_id} from {key}")
                 
             # Transition to 'К выполнению' (Status ID: 11)
             requests.post(f"{JIRA_URL}/rest/api/3/issue/{key}/transitions", json={"transition": {"id": "11"}}, auth=auth)

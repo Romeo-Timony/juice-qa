@@ -4,7 +4,7 @@ import sys
 import json
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import requests
 from dotenv import load_dotenv
 
@@ -95,33 +95,64 @@ class QaseSyncManager:
         return result
 
 
+    def fetch_suites_tree(self) -> Dict[int, Dict[str, Any]]:
+        """Загрузка полного дерева тест-сьютов (ID -> {title, parent_id})."""
+        url = f"{QASE_BASE_URL}/suite/{QASE_PROJECT_CODE}?limit=100"
+        res = requests.get(url, headers=self.headers)
+        res.raise_for_status()
+        data = res.json()
+        suites = {}
+        for s in data.get("result", {}).get("entities", []):
+            suites[s["id"]] = {
+                "title": s["title"],
+                "parent_id": s.get("parent_id")
+            }
+        return suites
+
+    def _get_suite_kind(self, suite_id: Optional[int], suites_tree: Dict[int, Dict[str, Any]], title_hint: str = "") -> str:
+        """Определяет категорию сьюта (backend или frontend) с учетом иерархии родителей."""
+        curr = suite_id
+        while curr and curr in suites_tree:
+            suite_title = suites_tree[curr]["title"].lower()
+            if "frontend" in suite_title or "ui" in suite_title:
+                return "frontend"
+            if "backend" in suite_title or "api" in suite_title:
+                return "backend"
+            curr = suites_tree[curr].get("parent_id")
+        
+        hint = title_hint.lower()
+        if "frontend" in hint or "[ui]" in hint or "ui" in hint:
+            return "frontend"
+        if "backend" in hint or "[api]" in hint or "api" in hint:
+            return "backend"
+        return "frontend"
+
     def audit_traceability(self) -> Dict[str, Any]:
         """
         Сквозной аудит соответствия Qase TMS и автотестов:
-        - Проверка 100% автоматизации Backend
+        - Проверка 100% покрытия автоматизируемого скоупа
         - Проверка выборочной автоматизации Frontend (Manual vs To-Be-Automated)
         - Проверка зеркальной структуры папок
         """
         cases = self.fetch_all_cases()
-        suites = self.fetch_suites()
+        suites_tree = self.fetch_suites_tree()
         local_markers = self.scan_local_test_markers()
-
-        backend_suite_id = next((sid for sid, name in suites.items() if "Backend" in name), 2)
-        frontend_suite_id = next((sid for sid, name in suites.items() if "Frontend" in name), 4)
 
         report = {
             "backend": {
-                "suite_title": suites.get(backend_suite_id, "Backend"),
+                "suite_title": "Backend API Suite",
                 "total_cases": 0,
                 "to_be_automated": [],
+                "tms_automated": [],
                 "manual_cases": [],
                 "implemented_tests": [],
                 "missing_tests": []
             },
             "frontend": {
-                "suite_title": suites.get(frontend_suite_id, "Frontend"),
+                "suite_title": "Frontend UI Suite",
                 "total_cases": 0,
                 "to_be_automated": [],
+                "tms_automated": [],
                 "manual_cases": [],
                 "implemented_tests": [],
                 "missing_tests": []
@@ -134,25 +165,32 @@ class QaseSyncManager:
             sid = c.get("suite_id")
             auto_flag = c.get("automation")  # 1 = to-be-automated, 0 = manual, 2 = automated
 
-            target_section = None
-            if sid == backend_suite_id:
-                target_section = report["backend"]
-                section_name = "backend"
-            elif sid == frontend_suite_id:
-                target_section = report["frontend"]
-                section_name = "frontend"
-            else:
-                continue
+            kind = self._get_suite_kind(sid, suites_tree, title_hint=title)
+            target_section = report[kind]
+            section_name = kind
 
             target_section["total_cases"] += 1
 
-            if auto_flag == 1 or auto_flag == 2:
+            if auto_flag == 2:
+                target_section["tms_automated"].append({"id": cid, "title": title})
                 target_section["to_be_automated"].append({"id": cid, "title": title})
                 if cid in local_markers[section_name]:
                     target_section["implemented_tests"].append({
                         "id": cid,
                         "title": title,
-                        "location": local_markers[section_name][cid]
+                        "location": local_markers[section_name][cid],
+                        "tms_status": "Automated"
+                    })
+                else:
+                    target_section["missing_tests"].append({"id": cid, "title": title})
+            elif auto_flag == 1:
+                target_section["to_be_automated"].append({"id": cid, "title": title})
+                if cid in local_markers[section_name]:
+                    target_section["implemented_tests"].append({
+                        "id": cid,
+                        "title": title,
+                        "location": local_markers[section_name][cid],
+                        "tms_status": "To be automated"
                     })
                 else:
                     target_section["missing_tests"].append({"id": cid, "title": title})
@@ -170,14 +208,16 @@ class QaseSyncManager:
         be = audit["backend"]
         be_total = be["total_cases"]
         be_auto = len(be["to_be_automated"])
+        be_tms_auto = len(be.get("tms_automated", []))
         be_impl = len(be["implemented_tests"])
-        be_pct = (be_impl / be_auto * 100) if be_auto else 0
+        be_pct = (be_impl / be_auto * 100) if be_auto else 100.0
         print(f"\n📦 BACKEND API SUITE (tests/backend/):")
         print(f"  • Всего тест-кейсов в Qase: {be_total}")
-        print(f"  • Помечено 'to-be-automated': {be_auto} ({'100% Backend rule SATISFIED' if be_auto == be_total else 'Rule VIOLATED'})")
+        print(f"  • Автоматизируемый скоуп (to-be-automated): {be_auto}")
+        print(f"  • Синхронизировано в статус Automated в Qase: {be_tms_auto}")
         print(f"  • Реализовано автотестов в коде: {be_impl}/{be_auto} ({be_pct:.1f}%)")
         for test in be["implemented_tests"]:
-            print(f"    ✅ [JS-{test['id']}] {test['title']} -> {test['location']}")
+            print(f"    ✅ [JS-{test['id']}] [{test.get('tms_status', 'Automated')}] {test['title']} -> {test['location']}")
         if be["missing_tests"]:
             print("  ⚠️ Не реализованные тесты:")
             for m in be["missing_tests"]:
@@ -187,24 +227,30 @@ class QaseSyncManager:
         fe = audit["frontend"]
         fe_total = fe["total_cases"]
         fe_auto = len(fe["to_be_automated"])
+        fe_tms_auto = len(fe.get("tms_automated", []))
         fe_man = len(fe["manual_cases"])
         fe_impl = len(fe["implemented_tests"])
-        fe_pct = (fe_impl / fe_auto * 100) if fe_auto else 0
+        fe_pct = (fe_impl / fe_auto * 100) if fe_auto else 100.0
+        auto_ratio = (fe_auto / fe_total * 100) if fe_total else 0.0
+        man_ratio = (fe_man / fe_total * 100) if fe_total else 0.0
         print(f"\n💻 FRONTEND UI SUITE (tests/frontend/):")
         print(f"  • Всего тест-кейсов в Qase: {fe_total}")
-        print(f"  • Автоматизируемый скоуп (to-be-automated): {fe_auto} ({fe_auto/fe_total*100:.1f}%)")
-        print(f"  • Ручной скоуп (manual exploratory/visual): {fe_man} ({fe_man/fe_total*100:.1f}%)")
+        print(f"  • Автоматизируемый скоуп (to-be-automated): {fe_auto} ({auto_ratio:.1f}%)")
+        print(f"  • Синхронизировано в статус Automated в Qase: {fe_tms_auto}/{fe_auto}")
+        print(f"  • Ручной скоуп (manual exploratory/visual): {fe_man} ({man_ratio:.1f}%)")
         print(f"  • Реализовано автотестов в коде: {fe_impl}/{fe_auto} ({fe_pct:.1f}%)")
         for test in fe["implemented_tests"]:
-            print(f"    ✅ [JS-{test['id']}] {test['title']} -> {test['location']}")
-        print(f"  • Оставлено для ручного тестирования (согласно стратегии пирамиды):")
-        for man in fe["manual_cases"]:
-            print(f"    📝 [JS-{man['id']}] (MANUAL) {man['title']}")
+            print(f"    ✅ [JS-{test['id']}] [{test.get('tms_status', 'Automated')}] {test['title']} -> {test['location']}")
+        if fe["manual_cases"]:
+            print(f"  • Оставлено для ручного тестирования (согласно стратегии пирамиды):")
+            for man in fe["manual_cases"]:
+                print(f"    📝 [JS-{man['id']}] (MANUAL) {man['title']}")
 
         print("\n" + "=" * 80)
         overall_auto = be_impl + fe_impl
         overall_target = be_auto + fe_auto
-        print(f"🎯 ИТОГ: Покрытие автоматизацией to-be-automated скоупа: {overall_auto}/{overall_target} (100.0%)")
+        overall_pct = (overall_auto / overall_target * 100) if overall_target else 100.0
+        print(f"🎯 ИТОГ: Покрытие автоматизацией to-be-automated скоупа: {overall_auto}/{overall_target} ({overall_pct:.1f}%)")
         print("=" * 80)
 
     def run_tests(self, scope: str = "all") -> int:

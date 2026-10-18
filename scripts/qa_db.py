@@ -134,6 +134,7 @@ def record_stage(issue_key: str, stage_number: int, stage_name: str, status: str
     payload_str = json.dumps(payload or {}, ensure_ascii=False)
     now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO pipeline_tasks (issue_key, summary, current_stage, status) VALUES (?, ?, ?, ?);", (issue_key, f"Task {issue_key}", stage_number, "IN_PROGRESS"))
         conn.execute("""
         INSERT INTO pipeline_stages (issue_key, stage_number, stage_name, status, score, verdict, payload_json, completed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -192,6 +193,7 @@ def mark_files_promoted(issue_key: str, approver: str):
 
 def record_audit_report(issue_key: str, stage_number: int, syntax_valid: bool, score: int, verdict: str, summary: str, strengths: List[str], risks: List[str], recs: List[str]):
     with get_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO pipeline_tasks (issue_key, summary, current_stage, status) VALUES (?, ?, ?, ?);", (issue_key, f"Task {issue_key}", stage_number, "IN_PROGRESS"))
         conn.execute("""
         INSERT INTO audit_reports (issue_key, stage_number, syntax_valid, score, verdict, summary, strengths_json, risks_json, recommendations_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);

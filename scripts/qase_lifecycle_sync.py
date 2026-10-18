@@ -49,6 +49,12 @@ class QaseApiClient:
         res.raise_for_status()
         return res.json().get("result", {}).get("entities", [])
 
+    def update_case_automation(self, case_id: int, automation_status: int = 2) -> bool:
+        """Обновление статуса автоматизации кейса в Qase TMS (0=manual, 1=to-be-automated, 2=automated)."""
+        url = f"{QASE_BASE_URL}/case/{QASE_PROJECT_CODE}/{case_id}"
+        res = requests.patch(url, headers=self.headers, json={"automation": automation_status})
+        return res.status_code == 200
+
 
 class LocalTestScanner:
     """Поиск автотестов по номеру Qase ID в кодовой базе."""
@@ -129,7 +135,7 @@ ID: {case_data.get('id')}
 
 Верни ТОЛЬКО обновленный Python код функции автотеста (с декораторами и докстрингом) без лишнего markdown и без пояснений.
 """
-        models = [os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"), "gemini-3.5-flash-lite", "gemini-flash-latest"]
+        models = [os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"), "gemini-flash-lite-latest", "gemini-3.5-flash-lite"]
         for m in models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={GEMINI_API_KEY}"
             try:
@@ -264,7 +270,7 @@ python scripts/hitl_review_gate.py --promote --approved-by "QA Lead"
     run_audit()
 
 
-def run_full_drift_detection():
+def run_full_drift_detection(prune: bool = False):
     """Проверка расхождений (Drift) между всеми кейсами Qase и локальными автотестами."""
     print("=" * 80)
     print("🛰️ ДЕТЕКТИРОВАНИЕ РАСХОЖДЕНИЙ (DRIFT) QASE TMS <-> CODEBASE")
@@ -287,6 +293,28 @@ def run_full_drift_detection():
         print(f"\n⚠️ ОБНАРУЖЕНЫ УДАЛЕННЫЕ В QASE КЕЙСЫ (Orphans в коде): {orphans}")
         for cid in orphans:
             print(f"   • ID #{cid} присутствует в коде, но отсутствует в Qase TMS")
+        
+        if prune:
+            print("\n🧹 Запуск очистки осиротевших автотестов (--prune)...")
+            scanner = LocalTestScanner()
+            files_to_check = set()
+            for cid in orphans:
+                test_info = scanner.find_test_by_qase_id(cid)
+                if test_info:
+                    files_to_check.add(Path(test_info["file"]))
+            
+            for file_path in files_to_check:
+                if not file_path.exists():
+                    continue
+                content = file_path.read_text(encoding="utf-8")
+                try:
+                    tree = ast.parse(content)
+                    tests_in_file = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
+                    file_path.unlink(missing_ok=True)
+                    print(f"   🗑️ Удален файл автотестов: {file_path.name}")
+                except Exception as e:
+                    print(f"   ⚠️ Ошибка при обработке {file_path}: {e}")
+            print("✅ Очистка сиротских автотестов завершена.")
     else:
         print("\n✅ Удаленных (сиротских) автотестов не обнаружено.")
 
@@ -299,17 +327,64 @@ def run_full_drift_detection():
         print("✅ Все кейсы с признаком 'to-be-automated' полностью автоматизированы (100%).")
 
 
+def sync_codebase_to_qase() -> Dict[str, Any]:
+    """
+    Обратная синхронизация: Python -> Qase TMS.
+    Находит все реализованные автотесты в tests/backend и tests/frontend.
+    Если кейс в Qase TMS имеет статус 0 (manual) или 1 (to-be-automated),
+    переводит его в статус 2 (Automated), сохраняя метку 'to-be-automated'.
+    """
+    print("=" * 80)
+    print("🔄 ОБРАТНАЯ СИНХРОНИЗАЦИЯ: CODEBASE -> QASE TMS (AUTOMATION STATUS)")
+    print("=" * 80)
+
+    qase = QaseApiClient()
+    all_cases = {c["id"]: c for c in qase.get_all_cases()}
+
+    from sync_qase_tests import QaseSyncManager
+    mgr = QaseSyncManager()
+    local_markers = mgr.scan_local_test_markers()
+    all_local_ids = set(local_markers["backend"].keys()) | set(local_markers["frontend"].keys())
+
+    print(f"💻 Найдено локальных автотестов: {len(all_local_ids)}")
+    updated = []
+    already_automated = []
+
+    for cid in sorted(all_local_ids):
+        case_info = all_cases.get(cid)
+        if not case_info:
+            continue
+        current_status = case_info.get("automation")
+        if current_status != 2:
+            ok = qase.update_case_automation(cid, automation_status=2)
+            if ok:
+                updated.append(cid)
+                print(f"  ✅ [JS-{cid}] Статус переведен в Automated (automation=2) с сохранением тега 'to-be-automated'")
+            else:
+                print(f"  ❌ [JS-{cid}] Не удалось обновить статус в Qase TMS")
+        else:
+            already_automated.append(cid)
+            print(f"  ℹ️ [JS-{cid}] Уже в статусе Automated (automation=2)")
+
+    print(f"\n📊 Итог: Обновлено {len(updated)} кейсов, уже актуально: {len(already_automated)}.")
+    return {"updated": updated, "already_automated": already_automated}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Qase TMS Bidirectional Lifecycle Sync")
     parser.add_argument("--sync-case", type=int, help="Синхронизировать автотест по конкретному ID тест-кейса Qase")
     parser.add_argument("--drift", action="store_true", help="Проверить расхождения между Qase TMS и кодовой базой")
+    parser.add_argument("--prune", action="store_true", help="Удалить автотесты, чьи кейсы были удалены из Qase TMS")
+    parser.add_argument("--push-status", action="store_true", help="Синхронизировать статус реализованных автотестов в Qase TMS (Automated)")
 
     args = parser.parse_args()
 
     if args.sync_case:
         sync_single_case(args.sync_case)
     elif args.drift:
-        run_full_drift_detection()
+        run_full_drift_detection(prune=args.prune)
+    elif args.push_status:
+        sync_codebase_to_qase()
     else:
         parser.print_help()
 

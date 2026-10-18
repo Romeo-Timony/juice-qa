@@ -17,7 +17,7 @@ else if (kind === 'task') title = 'Техническая задача'
 else if (kind === 'generic') title = 'Общая задача'
 
 const lines = []
-lines.push(`h2. 🧠 [Этап 2 из 7] Интеллект-карта проверок (QA MindMap): ${title} (${ctx.issueKey})`)
+lines.push(`h2. 🧠 [Этап 2 из 8] Интеллект-карта проверок (QA MindMap): ${title} (${ctx.issueKey})`)
 
 if (kind === 'backend') {
   lines.push('*Формат:* Многоуровневая структура MindMap для REST API, контрактов данных, JWT-безопасности и ORM-моделей.')
@@ -345,4 +345,12 @@ lines.push('_Интеллект-карта сформирована автома
 
 const commentBody = lines.join('\n')
 
-return [{ json: { issueKey: ctx.issueKey, kind: ctx.kind, commentBody } }]
+const existingComments = ($('Jira: Загрузить данные задачи').first().json.fields?.comment?.comments) || []
+const stage2 = existingComments.find(c => c.body && c.body.includes('[Этап 2 из'))
+const commentMethod = stage2 ? 'PUT' : 'POST'
+const jiraBase = 'https://romeo-timony.atlassian.net'
+const commentUrl = stage2
+  ? `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment/${stage2.id}`
+  : `${jiraBase}/rest/api/2/issue/${ctx.issueKey}/comment`
+
+return [{ json: { issueKey: ctx.issueKey, kind: ctx.kind, commentBody, commentMethod, commentUrl } }]

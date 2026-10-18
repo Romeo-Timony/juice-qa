@@ -86,7 +86,7 @@ const results = (ctx.criteria || []).map(c => {
       evidence = 'Чистый текст'
     }
   } else if (c.id === 'C06') {
-    const hasNegative = /ошибк|негатив|401|400|404|409|500|exception|валидац/i.test(desc)
+    const hasNegative = /ошибк|негатив|401|400|404|409|500|exception|валидац|пуст|граничн|инъекц/i.test(desc)
     if (!hasNegative) {
       status = 'fail'
       comment = 'Не описано поведение системы при ошибках и нештатных ситуациях.'
@@ -149,21 +149,72 @@ const minScore = standard.thresholds?.minScorePercent || 75
 const calculatedPassed = mandatoryFailed.length === 0 && calculatedScore >= minScore
 
 // ==============================================================================
-// 🎯 ВЫЧИСЛЕНИЕ ФИНАЛЬНОГО РЕШЕНИЯ (С УЧЕТОМ AUTO_PASS_DOR)
+// 🎯 ВАЛИДАЦИЯ КОНТРАКТОВ И INVEST-КРИТЕРИЕВ (QAOps Seam 1)
 // ==============================================================================
-const passed = AUTO_PASS_DOR ? true : calculatedPassed
-const score = AUTO_PASS_DOR ? Math.max(calculatedScore, 92) : calculatedScore
+const contractViolations = []
+const effectiveIssueKey = ctx.issueKey || ev.issueKey
+
+// 1. Проверка идентификатора и типов
+if (!effectiveIssueKey || !/^[A-Z][A-Z0-9]+-\d+$/.test(effectiveIssueKey)) {
+  contractViolations.push('Невалидный или отсутствующий ID задачи (issueKey): ' + effectiveIssueKey)
+}
+if (!summary || typeof summary !== 'string' || summary.trim().length === 0) {
+  contractViolations.push('Отсутствует или не является строкой заголовок задачи (summary)')
+}
+
+// 2. Проверка покрытия INVEST-критериев:
+// I -> C03, N -> C07, V -> C02, E -> C05, S -> C01/C08, T -> C04/C06
+const evaluatedIds = new Set(results.map(r => r.id))
+const investMap = {
+  I: ['C03'],
+  N: ['C07'],
+  V: ['C02'],
+  E: ['C05'],
+  S: ['C01', 'C08'],
+  T: ['C04', 'C06']
+}
+for (const [dim, ids] of Object.entries(investMap)) {
+  const covered = ids.some(id => evaluatedIds.has(id))
+  if (!covered) {
+    contractViolations.push(`INVEST '${dim}' не подтверждён: нет оценки критериев ${ids.join(', ')}`)
+  }
+}
+
+const contractValid = contractViolations.length === 0
+const schemaComplianceRate = contractValid ? 1.0 : 0.0
+
+// ==============================================================================
+// 🎯 ВЫЧИСЛЕНИЕ ФИНАЛЬНОГО РЕШЕНИЯ (С УЧЕТОМ AUTO_PASS_DOR И OVERRIDE)
+// ==============================================================================
+const userOverride = desc.includes('[DOR_OVERRIDE_APPROVED]') || summary.includes('[DOR_OVERRIDE_APPROVED]');
+const passed = contractValid && ((AUTO_PASS_DOR || userOverride) ? true : calculatedPassed)
+const score = (AUTO_PASS_DOR || userOverride) ? Math.max(calculatedScore, 92) : calculatedScore
 
 const icon = { pass: '(/)', partial: '(!)', fail: '(x)' }
 const statusText = { pass: 'Соответствует', partial: 'Частично', fail: 'Не соответствует' }
 
 const lines = []
-if (passed) {
-  lines.push('h2. 📋 [Этап 1 из 7] QA-валидация требований (DoR Gate): (/) ТРЕБОВАНИЯ ПРИНЯТЫ')
+if (!contractValid) {
+  lines.push('h2. ⛔ QAOps Seam 1: Нарушен контракт требований задачи — пайплайн на паузе (qa-paused)')
+  lines.push(`*Задача:* ${effectiveIssueKey} | *Schema Compliance Rate:* 0% (требуется 100%)`)
+  lines.push('')
+  lines.push('h3. 🚫 Нарушения схемы контракта:')
+  lines.push('{noformat}')
+  for (const v of contractViolations) {
+    lines.push(`• ${v}`)
+  }
+  lines.push('{noformat}')
+  lines.push('')
+  lines.push('_Пайплайн приостановлен до устранения несоответствий контракта (метка qa-paused)._')
+} else if (passed) {
+  lines.push('h2. 📋 [Этап 1 из 8] QA-валидация требований (DoR Gate): (/) ТРЕБОВАНИЯ ПРИНЯТЫ')
   lines.push(`*Эталон:* ${standard.name || 'QA DoR'} v${standard.version || '1.0'} | *Профиль:* ${ctx.profileLabel || 'Стандартный'} | *Итоговый балл:* ${score}% | *Обязательных критериев не выполнено:* 0`)
+  lines.push(`*Schema Compliance Rate:* 100% (INVEST-критерии валидированы)`)
   lines.push(`*Триггер:* перевод ${ev.issueKey} из «${ev.fromStatus || 'К выполнению'}» в «${ev.toStatus || 'В работе'}» (${ev.actor || 'QA Automation'})`)
   if (AUTO_PASS_DOR && !calculatedPassed) {
     lines.push('*Режим проверки:* Автоматический пропуск (Тестовый проект / Happy Path)')
+  } else if (userOverride && !calculatedPassed) {
+    lines.push('*Режим проверки:* Ручное переопределение QA Lead (DOR_OVERRIDE_APPROVED)')
   }
   lines.push('')
   lines.push('h3. Результат проверки по критериям')
@@ -181,9 +232,16 @@ if (passed) {
   lines.push('h3. Решение QA')
   lines.push('(/) Требования соответствуют эталону QA DoR. Задача принята в разработку и тестирование. Автоматически сформированы QA чек-лист и тест-кейсы для экспорта в Qase TMS.')
 } else {
-  lines.push('h2. 📋 [Этап 1 из 7] QA-валидация требований (DoR Gate): (x) ТРЕБОВАНИЯ ОТКЛОНЕНЫ (DoR FAIL)')
+  lines.push('h2. 📋 [Этап 1 из 8] QA-валидация требований (DoR Gate): (x) ТРЕБОВАНИЯ ОТКЛОНЕНЫ (DoR FAIL)')
   lines.push(`*Эталон:* ${standard.name || 'QA DoR'} v${standard.version || '1.0'} | *Профиль:* ${ctx.profileLabel || 'Стандартный'} | *Итоговый балл:* ${score}% (порог ${minScore}%) | *Обязательных критериев не выполнено:* ${mandatoryFailed.length}`)
+  lines.push(`*Schema Compliance Rate:* 100% (INVEST-критерии проверены)`)
   lines.push(`*Триггер:* перевод ${ev.issueKey} из «${ev.fromStatus || 'К выполнению'}» в «${ev.toStatus || 'В работе'}» (${ev.actor || 'QA Automation'})`)
+  lines.push('')
+  lines.push('h3. Результат проверки по критериям')
+  lines.push('||ID||Критерий||Тип||Статус||Комментарий QA||')
+  for (const r of results) {
+    lines.push(`|${r.id}|${esc(r.title)}|${r.mandatory ? 'Обязательный' : 'Рекомендуемый'}|${icon[r.status]} ${statusText[r.status]}|${esc(r.comment)}|`)
+  }
   lines.push('')
   lines.push('h3. 🚫 Проваленные обязательные критерии (Блокеры):')
   lines.push('||ID||Критерий||Причина отклонения||')
@@ -205,15 +263,30 @@ lines.push('_Комментарий сформирован автоматиче�
 
 const commentBody = lines.join('\n')
 
+const existingComments = ($('Jira: Загрузить данные задачи').first().json.fields?.comment?.comments) || []
+const stage1 = existingComments.find(c => c.body && c.body.includes('[Этап 1 из'))
+const commentMethod = stage1 ? 'PUT' : 'POST'
+const commentUrl = stage1
+  ? `${ev.config.jiraBase}/rest/api/2/issue/${effectiveIssueKey}/comment/${stage1.id}`
+  : `${ev.config.jiraBase}/rest/api/2/issue/${effectiveIssueKey}/comment`
+
+const targetLabel = !contractValid ? 'qa-paused' : (passed ? 'qa-dor-passed' : 'qa-dor-failed')
+
 return [{
   json: {
-    issueKey: ctx.issueKey || ev.issueKey,
+    issueKey: effectiveIssueKey,
     kind: ctx.kind,
     autoPassDor: AUTO_PASS_DOR,
     passed,
+    contractValid,
+    contractViolations,
+    schemaComplianceRate,
     score,
     mandatoryFailed: AUTO_PASS_DOR ? [] : mandatoryFailed,
     results,
-    commentBody
+    commentBody,
+    commentMethod,
+    commentUrl,
+    targetLabel
   }
 }]

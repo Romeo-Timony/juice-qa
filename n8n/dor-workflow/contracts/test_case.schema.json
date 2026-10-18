@@ -1,0 +1,179 @@
+{
+  "$defs": {
+    "CaseStep": {
+      "additionalProperties": true,
+      "properties": {
+        "action": {
+          "minLength": 3,
+          "title": "Action",
+          "type": "string"
+        },
+        "data": {
+          "default": "",
+          "title": "Data",
+          "type": "string"
+        },
+        "expected_result": {
+          "minLength": 3,
+          "title": "Expected Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "expected_result"
+      ],
+      "title": "CaseStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "anyOf": [
+    {
+      "properties": {
+        "tags": {
+          "contains": {
+            "enum": [
+              "smoke",
+              "regress",
+              "regression",
+              "fast-regression",
+              "full-regression"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "enum": [
+            "smoke",
+            "regression"
+          ]
+        }
+      }
+    }
+  ],
+  "description": "Test case as produced by 08_format_testcases.js before it is written to Qase.",
+  "errorMessage": "Нет обязательного тега набора (Smoke/Regress)",
+  "properties": {
+    "title": {
+      "minLength": 10,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "minLength": 20,
+      "title": "Description",
+      "type": "string"
+    },
+    "covers": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Covers",
+      "type": "array"
+    },
+    "type": {
+      "enum": [
+        "functional",
+        "smoke",
+        "regression",
+        "security",
+        "usability",
+        "performance",
+        "acceptance",
+        "compatibility",
+        "integration"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "critical",
+        "major",
+        "normal",
+        "minor",
+        "trivial"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "priority": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "layer": {
+      "enum": [
+        "e2e",
+        "api",
+        "unit"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "behavior": {
+      "default": "positive",
+      "enum": [
+        "positive",
+        "negative",
+        "destructive"
+      ],
+      "title": "Behavior",
+      "type": "string"
+    },
+    "automation": {
+      "enum": [
+        "to-be-automated",
+        "manual",
+        "automated"
+      ],
+      "title": "Automation",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Tags",
+      "type": "array"
+    },
+    "preconditions": {
+      "default": "",
+      "title": "Preconditions",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/CaseStep"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "covers",
+    "type",
+    "severity",
+    "priority",
+    "layer",
+    "automation",
+    "tags",
+    "steps"
+  ],
+  "title": "CaseContract",
+  "type": "object"
+}

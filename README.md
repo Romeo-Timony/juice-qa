@@ -1,6 +1,9 @@
-# QA Automation Framework — OWASP Juice Shop
+# Autonomous QA Automation & QAOps Ecosystem — OWASP Juice Shop
 
-Комплексный фреймворк автоматизированного тестирования на Python, построенный вокруг оркестрации **n8n**, задач **Jira (DoR Gate)**, тест-дизайна в **Qase TMS** и отчетности **Allure Report**.
+> 📌 **Для рекрутеров и составления резюме:** См. подробное [Резюме-досье проекта и готовые формулировки навыков (QA_ENGINEER_RESUME_AND_PROJECT_DOSSIER.md)](./QA_ENGINEER_RESUME_AND_PROJECT_DOSSIER.md).  
+> 📐 **Для технических архитекторов:** См. [Архитектурную спецификацию QAOps Seams 1–6 (ARCHITECTURE_AND_QAOPS_SPECIFICATION.md)](./ARCHITECTURE_AND_QAOPS_SPECIFICATION.md).
+
+Комплексная автономная экосистема обеспечения качества на Python 3.12 (Pytest, Playwright, Requests, Pydantic v2, Allure Report), построенная вокруг событийно-ориентированной оркестрации **n8n**, AI-агентов (LLM-as-a-Judge на Gemini Flash / DeepEval), контрактного взаимодействия с **Jira Cloud (DoR Gate)**, управления тестированием в **Qase TMS** и промышленного контура **QAOps (Seams 1–6)**.
 
 ---
 
@@ -90,8 +93,14 @@ python sync_qase_tests.py
 # Проверка расхождений (Drift Detection) между Qase TMS и автотестами в коде
 python scripts/qase_lifecycle_sync.py --drift
 
-# Адаптация автотеста при изменении/удалении кейса в Qase (с помещением в tests/review/)
-python scripts/qase_lifecycle_sync.py --sync-case 81
+# Проверка расхождений с автоочисткой удаленных из Qase кейсов в коде
+python scripts/qase_lifecycle_sync.py --drift --prune
+
+# Обратная синхронизация: перевод реализованных тестов в статус Automated (automation=2) с сохранением тега to-be-automated
+python scripts/qase_lifecycle_sync.py --push-status
+
+# Адаптация автотеста при изменении кейса в Qase (с помещением в tests/review/)
+python scripts/qase_lifecycle_sync.py --sync-case <id>
 ```
 
 ### 5. Human-in-the-Loop & Независимый AI-Аудит (Review Gate)

@@ -157,14 +157,41 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
 
     key_clean = issue_key.lower().replace("-", "")
 
-    # Auto-detect kind
+    # Auto-detect kind from issue summary, DB or Jira
     if kind is None:
-        if "js-17" in issue_key.lower() or "backend" in issue_key.lower():
+        summary_text = ""
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("SELECT summary FROM pipeline_tasks WHERE issue_key = ?", (issue_key,))
+            row = cur.fetchone()
+            if row and row[0]:
+                summary_text = row[0]
+            conn.close()
+        except Exception:
+            pass
+
+        if not summary_text:
+            try:
+                j_url = os.getenv("ATLASSIAN_BASE_URL")
+                j_user = os.getenv("ATLASSIAN_USER_EMAIL")
+                j_token = os.getenv("ATLASSIAN_API_TOKEN")
+                if j_url and j_user and j_token:
+                    jr = requests.get(f"{j_url}/rest/api/2/issue/{issue_key}?fields=summary", auth=(j_user, j_token), timeout=5)
+                    if jr.ok:
+                        summary_text = jr.json().get("fields", {}).get("summary", "")
+            except Exception:
+                pass
+
+        combo = f"{issue_key} {summary_text}".lower()
+        if "[backend]" in combo or "backend" in combo or "rest api" in combo or "js-17" in combo or "js-20" in combo:
             kind = "backend"
-        elif "js-16" in issue_key.lower() or "frontend" in issue_key.lower():
+        elif "[frontend]" in combo or "frontend" in combo or "ui" in combo or "angular" in combo or "js-16" in combo or "js-19" in combo:
             kind = "frontend"
         else:
-            kind = "all"
+            kind = "backend"
+
+    print(f"🎯 [SCAFFOLD] Определен целевой слой тестов: '{kind.upper()}' для задачи {issue_key}")
 
     # Папки для Staging (Review)
     review_frontend_dir = BASE_DIR / "tests" / "review" / "frontend"
@@ -175,7 +202,11 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
     created_staging_files = []
 
     # 2. Генерация Backend автотестов (API)
-    if kind in ("backend", "all"):
+    if kind == "backend":
+        # Очищаем возможные ошибочные фронтенд-файлы для этой задачи
+        old_fe = review_frontend_dir / f"test_{key_clean}_ui.py"
+        if old_fe.exists():
+            old_fe.unlink()
         be_code_lines = [
             '"""',
             f'Backend REST API Automated Test Suite for {issue_key}',
@@ -318,8 +349,12 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         created_staging_files.append(review_be_file)
         print(f"📦 Staging Backend: сформирован файл на ревью ({len(auto_cases)} тестов): {review_be_file}")
 
-    # 3. Генерация Frontend автотестов (СТРОГО 9 автоматизируемых кейсов)
-    if kind in ("frontend", "all"):
+    # 3. Генерация Frontend автотестов
+    if kind == "frontend":
+        # Очищаем возможные ошибочные бэкенд-файлы для этой задачи
+        old_be = review_backend_dir / f"test_{key_clean}_api.py"
+        if old_be.exists():
+            old_be.unlink()
         code_lines = [
             '"""',
             f'Frontend UI Automated Test Suite for {issue_key}',
@@ -482,44 +517,12 @@ def generate_tests(issue_key: str, kind: str = None, target_dir: Path = None) ->
         created_staging_files.append(review_file)
         print(f"📦 Staging: сформирован файл на ревью ({len(auto_cases)} тестов): {review_file}")
 
-    # 3. Запуск Quality Gate 2 (Аудит тестов в tests/review/)
-    print("\n🔍 Запуск аудита качества кода в tests/review/...")
-    try:
-        from scripts.hitl_review_gate import run_audit, promote_files
-        audit_passed = run_audit(issue_key=issue_key)
-        print(f"📊 Результат аудита: {'ОДОБРЕНО' if audit_passed else 'ТРЕБУЕТ ДОРАБОТКИ'}")
-        
-        # 4. Промоушн в боевые директории с очисткой папки review/
-        print("\n🚀 Промоушн автотестов в основную структуру проекта...")
-        promote_files(approver="QA Lead", issue_key=issue_key)
-    except Exception as e:
-        print(f"⚠️ Ошибка при выполнении аудита/промоушена: {e}")
-
-    final_files = []
-    if kind in ("backend", "all"):
-        promoted_be = BASE_DIR / "tests" / "backend" / f"test_{key_clean}_api.py"
-        if promoted_be.exists():
-            final_files.append(promoted_be)
-            if target_dir:
-                wt_be = Path(target_dir) / "tests" / "backend" / f"test_{key_clean}_api.py"
-                wt_be.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(promoted_be, wt_be)
-                print(f"📁 Скопировано в изолированный Worktree: {wt_be}")
-
-    if kind in ("frontend", "all"):
-        promoted_fe = BASE_DIR / "tests" / "frontend" / f"test_{key_clean}_ui.py"
-        if promoted_fe.exists():
-            final_files.append(promoted_fe)
-            if target_dir:
-                wt_fe = Path(target_dir) / "tests" / "frontend" / f"test_{key_clean}_ui.py"
-                wt_fe.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(promoted_fe, wt_fe)
-                print(f"📁 Скопировано в изолированный Worktree: {wt_fe}")
-
-    print(f"✅ Готово! Файлы автотестов {final_files} успешно внедрены.")
-    return final_files
+    print(f"✅ Staging завершен! Сформировано файлов на ревью: {len(created_staging_files)}")
+    for sf in created_staging_files:
+        print(f"   • {sf}")
+    return created_staging_files
 
 
 if __name__ == "__main__":
-    key = sys.argv[1] if len(sys.argv) > 1 else "JS-16"
-    generate_tests(key, kind="frontend")
+    key = sys.argv[1] if len(sys.argv) > 1 else "JS-20"
+    generate_tests(key)

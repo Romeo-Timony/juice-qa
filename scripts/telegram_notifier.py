@@ -109,6 +109,26 @@ def notify_pipeline_started(issue_key: str, summary: str, actor: str = "Roman Ti
     return send_telegram(text, reply_markup=markup)
 
 
+def notify_dor_rejected(issue_key: str, score: int = 0, blockers: str = "", details: str = ""):
+    text = (
+        f"❌ <b>[DoR GATE] Требования отклонены (DoR FAIL)</b>\n\n"
+        f"📌 <b>Задача:</b> <code>{issue_key}</code>\n"
+        f"📊 <b>Оценка DoR:</b> {score}%\n"
+        f"🚫 <b>Блокеры:</b> {blockers or 'Не выполнен обязательный критерий (C06 - Негативные сценарии)'}\n\n"
+        f"↩️ <i>Задача возвращена в статус «К выполнению».</i>\n\n"
+        f"👉 <i>Для ручного переопределения (Override) отправьте реакцию ❤️ или «ОК» в комментарий Jira.</i>"
+    )
+    markup = {
+        "inline_keyboard": [
+            [
+                {"text": "🔗 Открыть задачу в Jira", "url": f"https://romeo-timony.atlassian.net/browse/{issue_key}"},
+                {"text": "📊 n8n Workflow", "url": "http://201.34.147.33:5678"}
+            ]
+        ]
+    }
+    return send_telegram(text, reply_markup=markup)
+
+
 def notify_gate1_waiting(issue_key: str, bdd_count: int, rtm_count: int):
     text = (
         f"⏸️ <b>[QUALITY GATE 1] Ожидание подтверждения QA Lead</b>\n\n"
