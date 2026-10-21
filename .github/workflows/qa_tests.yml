@@ -10,6 +10,12 @@ on:
     branches:
       - master
       - main
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: 'Jira Issue Key'
+        required: false
+        default: 'JS-40'
 
 permissions:
   contents: write
