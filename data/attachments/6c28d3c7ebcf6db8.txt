@@ -1,7 +1,0 @@
-curl -X POST 'http://localhost:3000/api/Addresss/'
-  -H 'User-Agent: python-requests/2.34.2'
-  -H 'Accept-Encoding: gzip, deflate'
-  -H 'Accept: */*'
-  -H 'Connection: keep-alive'
-  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiYWRtaW5AanVpY2Utc2gub3AiLCJwYXNzd29yZCI6IjAxOTIwMjNhN2JiZDczMjUwNTE2ZjA2OWRmMThiNTAwIiwicm9sZSI6ImFkbWluIiwiZGVsdXhlVG9rZW4iOiIiLCJsYXN0TG9naW5JcCI6IiIsInByb2ZpbGVJbWFnZSI6ImFzc2V0cy9wdWJsaWMvaW1hZ2VzL3VwbG9hZHMvMS5wbmciLCJ0b3RwU2VjcmV0IjoiIiwiaXNBY3RpdmUiOnRydWUsImNyZWF0ZWRBdCI6IjIwMjYtMTAtMjEgMTk6NDE6NTAuNDQwICswMDowMCIsInVwZGF0ZWRBdCI6IjIwMjYtMTAtMjEgMTk6NDI6MjguMjA1ICswMDowMCIsImRlbGV0ZWRBdCI6bnVsbH0sImJpZCI6MSwiaWF0IjoxNzkyNjExNzQ4fQ.wxKdX4qxrnXfJDyWNdmNcoKW5uat0Ds2HdcqSWbnHNitfp8k6tBqPpEh_Tp0S6KKk6WLnuVCaqCx6nEtUb0pfcEwaUrsF5B1GDKrUXB1KAyUnJgfIggwWByEOIGDgFsJbSJPatwb3Z7KNimWhmdvc_sn02RKhYj9vBOdRQbncIQ'
-  -d '{"country": "Germany", "fullName": "QA Admin", "mobileNum": "1234567890", "zipCode": "10115", "streetAddress": "Main Street 1", "city": "Berlin"}'
