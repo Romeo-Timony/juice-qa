@@ -380,7 +380,18 @@ def process_delta_requirements(issue_key: str, delta_prompt: str, author: str = 
         print(f"📊 Анализ пирамиды тестирования: {len(cases_to_automate)} к автоматизации, {len(manual_cases)} оставлены для ручных проверок.")
 
         test_success = True
-        target_test_file = BASE_DIR / "tests" / "frontend" / f"test_{issue_key.lower().replace('-', '')}_ui.py"
+        # Динамический поиск целевого файла теста в новой доменной структуре (tests/ui, tests/api)
+        target_candidates = list((BASE_DIR / "tests" / "ui").rglob("*.py")) + list((BASE_DIR / "tests" / "frontend").rglob("*.py"))
+        target_test_file = None
+        for candidate in target_candidates:
+            if candidate.name == "__init__.py":
+                continue
+            if "auth" in issue_key.lower() or "16" in issue_key or "17" in issue_key:
+                if "auth" in candidate.name or "js16" in candidate.name:
+                    target_test_file = candidate
+                    break
+        if not target_test_file:
+            target_test_file = BASE_DIR / "tests" / "ui" / "auth" / "test_auth_ui.py"
 
         # 4-7. Автоматизация выполняется ТОЛЬКО для кейсов с признаком 'to-be-automated'
         if cases_to_automate:

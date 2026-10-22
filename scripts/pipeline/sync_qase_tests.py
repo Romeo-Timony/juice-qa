@@ -1,0 +1,287 @@
+import os
+import re
+import sys
+import json
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import requests
+from dotenv import load_dotenv
+
+sys.stdout.reconfigure(encoding='utf-8')
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+QASE_API_TOKEN = os.getenv("QASE_API_TOKEN")
+QASE_PROJECT_CODE = os.getenv("QASE_PROJECT_CODE", "JS")
+QASE_BASE_URL = "https://api.qase.io/v1"
+
+
+class QaseSyncManager:
+    def __init__(self):
+        if not QASE_API_TOKEN:
+            raise ValueError("QASE_API_TOKEN is missing in .env")
+        self.headers = {
+            "Token": QASE_API_TOKEN,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+    def fetch_all_cases(self) -> List[Dict[str, Any]]:
+        """Загрузка всех тест-кейсов из Qase TMS для проекта."""
+        url = f"{QASE_BASE_URL}/case/{QASE_PROJECT_CODE}?limit=100"
+        res = requests.get(url, headers=self.headers)
+        res.raise_for_status()
+        data = res.json()
+        return data.get("result", {}).get("entities", [])
+
+    def fetch_suites(self) -> Dict[int, str]:
+        """Загрузка дерева тест-сьютов (ID -> Название)."""
+        url = f"{QASE_BASE_URL}/suite/{QASE_PROJECT_CODE}?limit=50"
+        res = requests.get(url, headers=self.headers)
+        res.raise_for_status()
+        data = res.json()
+        suites = {}
+        for s in data.get("result", {}).get("entities", []):
+            suites[s["id"]] = s["title"]
+        return suites
+
+    def scan_local_test_markers(self) -> Dict[str, Dict[int, str]]:
+        """
+        Сканирование директорий tests/backend и tests/frontend через AST парсер Python.
+        Надежно извлекает @pytest.mark.qase(id=...) независимо от многострочной параметризации.
+        """
+        import ast
+
+        result = {"backend": {}, "frontend": {}}
+        tests_dir = BASE_DIR / "tests"
+
+        suite_mapping = [
+            ("backend", [tests_dir / "api", tests_dir / "backend"]),
+            ("frontend", [tests_dir / "ui", tests_dir / "frontend"])
+        ]
+
+        for suite_name, candidate_paths in suite_mapping:
+            for suite_path in candidate_paths:
+                if not suite_path.exists():
+                    continue
+                for file_path in suite_path.rglob("*.py"):
+                    if file_path.name.startswith("__"):
+                        continue
+                    content = file_path.read_text(encoding="utf-8")
+                    try:
+                        tree = ast.parse(content, filename=str(file_path))
+                    except Exception:
+                        continue
+
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+                            for decorator in node.decorator_list:
+                                # Обработка @pytest.mark.qase(id=...)
+                                if isinstance(decorator, ast.Call):
+                                    func = decorator.func
+                                    is_qase_mark = False
+                                    if isinstance(func, ast.Attribute) and func.attr == "qase":
+                                        is_qase_mark = True
+                                    elif isinstance(func, ast.Attribute) and func.attr == "mark":
+                                        pass
+
+                                    if is_qase_mark:
+                                        qase_id = None
+                                        for kw in decorator.keywords:
+                                            if kw.arg == "id" and isinstance(kw.value, ast.Constant):
+                                                qase_id = kw.value.value
+                                        if qase_id is None and decorator.args and isinstance(decorator.args[0], ast.Constant):
+                                            qase_id = decorator.args[0].value
+
+                                        if qase_id is not None:
+                                            result[suite_name][int(qase_id)] = f"{file_path.name}:{node.name}"
+
+        return result
+
+
+    def fetch_suites_tree(self) -> Dict[int, Dict[str, Any]]:
+        """Загрузка полного дерева тест-сьютов (ID -> {title, parent_id})."""
+        url = f"{QASE_BASE_URL}/suite/{QASE_PROJECT_CODE}?limit=100"
+        res = requests.get(url, headers=self.headers)
+        res.raise_for_status()
+        data = res.json()
+        suites = {}
+        for s in data.get("result", {}).get("entities", []):
+            suites[s["id"]] = {
+                "title": s["title"],
+                "parent_id": s.get("parent_id")
+            }
+        return suites
+
+    def _get_suite_kind(self, suite_id: Optional[int], suites_tree: Dict[int, Dict[str, Any]], title_hint: str = "") -> str:
+        """Определяет категорию сьюта (backend или frontend) с учетом иерархии родителей."""
+        curr = suite_id
+        while curr and curr in suites_tree:
+            suite_title = suites_tree[curr]["title"].lower()
+            if "frontend" in suite_title or "ui" in suite_title:
+                return "frontend"
+            if "backend" in suite_title or "api" in suite_title:
+                return "backend"
+            curr = suites_tree[curr].get("parent_id")
+        
+        hint = title_hint.lower()
+        if "frontend" in hint or "[ui]" in hint or "ui" in hint:
+            return "frontend"
+        if "backend" in hint or "[api]" in hint or "api" in hint:
+            return "backend"
+        return "frontend"
+
+    def audit_traceability(self) -> Dict[str, Any]:
+        """
+        Сквозной аудит соответствия Qase TMS и автотестов:
+        - Проверка 100% покрытия автоматизируемого скоупа
+        - Проверка выборочной автоматизации Frontend (Manual vs To-Be-Automated)
+        - Проверка зеркальной структуры папок
+        """
+        cases = self.fetch_all_cases()
+        suites_tree = self.fetch_suites_tree()
+        local_markers = self.scan_local_test_markers()
+
+        report = {
+            "backend": {
+                "suite_title": "Backend API Suite",
+                "total_cases": 0,
+                "to_be_automated": [],
+                "tms_automated": [],
+                "manual_cases": [],
+                "implemented_tests": [],
+                "missing_tests": []
+            },
+            "frontend": {
+                "suite_title": "Frontend UI Suite",
+                "total_cases": 0,
+                "to_be_automated": [],
+                "tms_automated": [],
+                "manual_cases": [],
+                "implemented_tests": [],
+                "missing_tests": []
+            }
+        }
+
+        for c in cases:
+            cid = c["id"]
+            title = c["title"]
+            sid = c.get("suite_id")
+            auto_flag = c.get("automation")  # 1 = to-be-automated, 0 = manual, 2 = automated
+
+            kind = self._get_suite_kind(sid, suites_tree, title_hint=title)
+            target_section = report[kind]
+            section_name = kind
+
+            target_section["total_cases"] += 1
+
+            if auto_flag == 2:
+                target_section["tms_automated"].append({"id": cid, "title": title})
+                target_section["to_be_automated"].append({"id": cid, "title": title})
+                if cid in local_markers[section_name]:
+                    target_section["implemented_tests"].append({
+                        "id": cid,
+                        "title": title,
+                        "location": local_markers[section_name][cid],
+                        "tms_status": "Automated"
+                    })
+                else:
+                    target_section["missing_tests"].append({"id": cid, "title": title})
+            elif auto_flag == 1:
+                target_section["to_be_automated"].append({"id": cid, "title": title})
+                if cid in local_markers[section_name]:
+                    target_section["implemented_tests"].append({
+                        "id": cid,
+                        "title": title,
+                        "location": local_markers[section_name][cid],
+                        "tms_status": "To be automated"
+                    })
+                else:
+                    target_section["missing_tests"].append({"id": cid, "title": title})
+            else:
+                target_section["manual_cases"].append({"id": cid, "title": title})
+
+        return report
+
+    def print_audit_summary(self, audit: Dict[str, Any]):
+        print("=" * 80)
+        print("📊 QA AUTOMATION & QASE TMS TRACEABILITY REPORT (n8n Architecture)")
+        print("=" * 80)
+
+        # 1. Backend
+        be = audit["backend"]
+        be_total = be["total_cases"]
+        be_auto = len(be["to_be_automated"])
+        be_tms_auto = len(be.get("tms_automated", []))
+        be_impl = len(be["implemented_tests"])
+        be_pct = (be_impl / be_auto * 100) if be_auto else 100.0
+        print(f"\n📦 BACKEND API SUITE (tests/backend/):")
+        print(f"  • Всего тест-кейсов в Qase: {be_total}")
+        print(f"  • Автоматизируемый скоуп (to-be-automated): {be_auto}")
+        print(f"  • Синхронизировано в статус Automated в Qase: {be_tms_auto}")
+        print(f"  • Реализовано автотестов в коде: {be_impl}/{be_auto} ({be_pct:.1f}%)")
+        for test in be["implemented_tests"]:
+            print(f"    ✅ [JS-{test['id']}] [{test.get('tms_status', 'Automated')}] {test['title']} -> {test['location']}")
+        if be["missing_tests"]:
+            print("  ⚠️ Не реализованные тесты:")
+            for m in be["missing_tests"]:
+                print(f"    ❌ [JS-{m['id']}] {m['title']}")
+
+        # 2. Frontend
+        fe = audit["frontend"]
+        fe_total = fe["total_cases"]
+        fe_auto = len(fe["to_be_automated"])
+        fe_tms_auto = len(fe.get("tms_automated", []))
+        fe_man = len(fe["manual_cases"])
+        fe_impl = len(fe["implemented_tests"])
+        fe_pct = (fe_impl / fe_auto * 100) if fe_auto else 100.0
+        auto_ratio = (fe_auto / fe_total * 100) if fe_total else 0.0
+        man_ratio = (fe_man / fe_total * 100) if fe_total else 0.0
+        print(f"\n💻 FRONTEND UI SUITE (tests/frontend/):")
+        print(f"  • Всего тест-кейсов в Qase: {fe_total}")
+        print(f"  • Автоматизируемый скоуп (to-be-automated): {fe_auto} ({auto_ratio:.1f}%)")
+        print(f"  • Синхронизировано в статус Automated в Qase: {fe_tms_auto}/{fe_auto}")
+        print(f"  • Ручной скоуп (manual exploratory/visual): {fe_man} ({man_ratio:.1f}%)")
+        print(f"  • Реализовано автотестов в коде: {fe_impl}/{fe_auto} ({fe_pct:.1f}%)")
+        for test in fe["implemented_tests"]:
+            print(f"    ✅ [JS-{test['id']}] [{test.get('tms_status', 'Automated')}] {test['title']} -> {test['location']}")
+        if fe["manual_cases"]:
+            print(f"  • Оставлено для ручного тестирования (согласно стратегии пирамиды):")
+            for man in fe["manual_cases"]:
+                print(f"    📝 [JS-{man['id']}] (MANUAL) {man['title']}")
+
+        print("\n" + "=" * 80)
+        overall_auto = be_impl + fe_impl
+        overall_target = be_auto + fe_auto
+        overall_pct = (overall_auto / overall_target * 100) if overall_target else 100.0
+        print(f"🎯 ИТОГ: Покрытие автоматизацией to-be-automated скоупа: {overall_auto}/{overall_target} ({overall_pct:.1f}%)")
+        print("=" * 80)
+
+    def run_tests(self, scope: str = "all") -> int:
+        """Запуск автотестов через pytest с выводом результатов."""
+        target_path = "tests"
+        if scope == "backend":
+            target_path = "tests/backend"
+        elif scope == "frontend":
+            target_path = "tests/frontend"
+
+        python_exe = sys.executable
+        cmd = [python_exe, "-m", "pytest", target_path, "-v"]
+        print(f"\n🚀 Запуск тестов: {' '.join(cmd)}\n")
+        res = subprocess.run(cmd, cwd=str(BASE_DIR))
+        return res.returncode
+
+if __name__ == "__main__":
+    manager = QaseSyncManager()
+    audit = manager.audit_traceability()
+    manager.print_audit_summary(audit)
+
+    if "--run" in sys.argv:
+        scope = "all"
+        if "--backend" in sys.argv:
+            scope = "backend"
+        elif "--frontend" in sys.argv:
+            scope = "frontend"
+        exit_code = manager.run_tests(scope)
+        sys.exit(exit_code)

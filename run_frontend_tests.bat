@@ -18,7 +18,7 @@ if not exist ".venv\Scripts\pytest.exe" (
 )
 
 echo [*] Executing frontend tests with Pytest...
-.venv\Scripts\pytest.exe tests/frontend %*
+.venv\Scripts\pytest.exe tests/ui %*
 
 echo.
 echo ================================================================================

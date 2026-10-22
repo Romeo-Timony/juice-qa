@@ -1,12 +1,12 @@
 @echo off
 setlocal
 chcp 65001 > nul
-title [QA Automation] Full Test Suite (Frontend + Backend)
+title [QA Automation] Full Test Suite (UI + API + E2E + Unit)
 cd /d "%~dp0"
 
 echo ================================================================================
-echo  [QA AUTOMATION] FULL REGRESSION SUITE (Frontend UI + Backend API)
-echo  Targets: tests/backend/ and tests/frontend/
+echo  [QA AUTOMATION] FULL REGRESSION SUITE (UI + API + E2E + Unit)
+echo  Targets: tests/ (Domain Architecture: API, UI, E2E, Unit)
 echo ================================================================================
 echo.
 
@@ -17,7 +17,7 @@ if not exist ".venv\Scripts\pytest.exe" (
 )
 
 echo [*] Executing all tests with Pytest...
-.venv\Scripts\pytest.exe tests/frontend tests/backend %*
+.venv\Scripts\pytest.exe tests/api tests/ui %*
 
 echo.
 echo ================================================================================

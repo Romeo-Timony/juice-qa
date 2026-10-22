@@ -1,0 +1,76 @@
+<h2>1. Паспорт функционального модуля</h2>
+<table>
+  <tbody><tr><th>Параметр</th><th>Значение</th></tr>
+  <tr><td>Задача в Jira</td><td><a href="https://romeo-timony.atlassian.net/browse/JS-3"><strong>JS-3</strong>: Модуль аутентификации, авторизации и управления профилем клиента</a></td></tr>
+  <tr><td>Родительский Эпик</td><td><a href="https://romeo-timony.atlassian.net/browse/JS-1"><strong>JS-1</strong>: Разработка ключевых функциональных модулей</a></td></tr>
+  <tr><td>Приоритет</td><td>High / Critical</td></tr>
+  <tr><td>Статус аналитики</td><td>Ready for Dev &amp; QA</td></tr>
+</tbody></table>
+
+<h2>2. Бизнес-контекст и User Story</h2>
+<p><strong>User Story:</strong><br />
+<em>Как зарегистрированный или новый клиент веб-магазина Juice Shop,<br />
+Я хочу иметь возможность безопасно регистрироваться, входить в систему, управлять персональными данными (адреса, платежные реквизиты) и восстанавливать пароль,<br />
+Чтобы совершать покупки от своего имени, отслеживать историю заказов и сохранять персональные настройки безопасности.</em></p>
+
+<h3>Бизнес-правила (Business Rules):</h3>
+<ul>
+  <li><strong>BR-AUTH-01:</strong> Email пользователя должен быть уникальным в системе (case-insensitive).</li>
+  <li><strong>BR-AUTH-02:</strong> Пароль должен содержать минимум 5 символов. Поддерживается отображение индикатора стойкости пароля.</li>
+  <li><strong>BR-AUTH-03:</strong> Для сброса пароля пользователь обязан предоставить ответ на заранее выбранный контрольный вопрос.</li>
+  <li><strong>BR-AUTH-04:</strong> При успешном входе клиенту выдается JWT-токен со сроком действия, используемый для авторизации API-запросов.</li>
+</ul>
+
+<h2>3. Системный анализ и архитектурные решения</h2>
+<h3>3.1. Frontend компоненты (Angular):</h3>
+<ul>
+  <li><code>RegisterComponent</code> (<code>/#/register</code>) &mdash; форма регистрации нового пользователя.</li>
+  <li><code>LoginComponent</code> (<code>/#/login</code>) &mdash; форма аутентификации.</li>
+  <li><code>ForgotPasswordComponent</code> (<code>/#/forgot-password</code>) &mdash; форма сброса пароля.</li>
+  <li><code>UserProfileComponent</code> (<code>/#/profile</code>) &mdash; личный кабинет, смена пароля, загрузка аватара.</li>
+  <li><code>AddressCreateComponent</code>, <code>PaymentMethodComponent</code> &mdash; управление адресной книгой и банковскими картами.</li>
+</ul>
+
+<h3>3.2. REST API эндпоинты:</h3>
+<table>
+  <thead>
+    <tr><th>Метод</th><th>Эндпоинт</th><th>Описание</th><th>Тело запроса / Ответа</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>POST</td><td><code>/api/Users/</code></td><td>Регистрация пользователя</td><td><code>{ email, password, passwordRepeat, securityQuestion, securityAnswer }</code></td></tr>
+    <tr><td>POST</td><td><code>/rest/user/login</code></td><td>Вход в систему</td><td><code>{ email, password }</code> ➔ <code>{ authentication: { token, bid, umail } }</code></td></tr>
+    <tr><td>POST</td><td><code>/rest/user/reset-password</code></td><td>Сброс пароля</td><td><code>{ email, answer, newPassword, repeatNewPassword }</code></td></tr>
+    <tr><td>GET / POST</td><td><code>/api/Addresss/</code></td><td>Список / Добавление адресов</td><td>Требует Bearer Token</td></tr>
+    <tr><td>GET / POST</td><td><code>/api/Cards/</code></td><td>Список / Добавление платежных карт</td><td>Требует Bearer Token</td></tr>
+  </tbody>
+</table>
+
+<h2>4. Функциональные требования (FR)</h2>
+<ol>
+  <li><strong>Регистрация:</strong> Проверка формата email по RFC 5322. Запрет отправки формы с незаполненными обязательными полями. Валидация совпадения пароля и повторного пароля.</li>
+  <li><strong>Аутентификация:</strong> Сохранение JWT токена в <code>localStorage</code> (ключ <code>token</code>). Применение токена через HTTP-интерцептор во всех последующих защищенных запросах.</li>
+  <li><strong>Восстановление пароля:</strong> Динамическая подгрузка текста контрольного вопроса по введенному email. При неверном ответе выдача ошибки без раскрытия внутренней структуры данных.</li>
+  <li><strong>Адресная книга:</strong> Возможность добавления нескольких адресов доставки с указанием страны, ФИО получателя, мобильного телефона, индекса, адреса и города.</li>
+</ol>
+
+<h2>5. Критерии приемки (BDD / Gherkin)</h2>
+<pre><code>Scenario: Успешная регистрация нового клиента
+  Given гость открывает страницу &quot;/#/register&quot;
+  When заполняет email &quot;client@test.com&quot;, пароль &quot;Secret123!&quot;, подтверждение &quot;Secret123!&quot;
+  And выбирает секретный вопрос &quot;Your eldest siblings middle name?&quot; и вводит ответ &quot;Alexander&quot;
+  And нажимает кнопку &quot;Register&quot;
+  Then система отображает нотификацию &quot;Registration completed successfully. You can now log in.&quot;
+  And пользователь перенаправляется на форму &quot;/#/login&quot;
+
+Scenario: Ошибка при попытке входа с неверным паролем
+  Given пользователь находится на &quot;/#/login&quot;
+  When вводит валидный email и неверный пароль
+  And нажимает &quot;Log in&quot;
+  Then отображается сообщение &quot;Invalid email or password.&quot;
+  And JWT-токен не сохраняется в хранилище браузера</code></pre>
+
+<h2>6. Нефункциональные требования (NFR)</h2>
+<ul>
+  <li><strong>Безопасность:</strong> Хранение паролей в хешированном виде с алгоритмом HMAC-SHA256 / bcrypt. Маскирование номеров кредитных карт (отображение только последних 4 цифр).</li>
+  <li><strong>Производительность:</strong> Время генерации JWT и ответа API входа не более 200 мс.</li>
+</ul>

@@ -501,6 +501,7 @@ def promote_files(approver: str, issue_key: str = "JS-19"):
     if backend_review.exists():
         for f in backend_review.glob("*.py"):
             target = BACKEND_DIR / f.name
+            target.parent.mkdir(parents=True, exist_ok=True)
             content = f.read_text(encoding="utf-8")
             header = f"# [HITL PROMOTED] Approved by: {approver} | Date: {now_str} | AI Audit: {state.get('verdict')} ({state.get('score')}/100)\n"
             target.write_text(header + content, encoding="utf-8")
@@ -514,6 +515,7 @@ def promote_files(approver: str, issue_key: str = "JS-19"):
     if frontend_review.exists():
         for f in frontend_review.glob("*.py"):
             target = FRONTEND_DIR / f.name
+            target.parent.mkdir(parents=True, exist_ok=True)
             content = f.read_text(encoding="utf-8")
             header = f"# [HITL PROMOTED] Approved by: {approver} | Date: {now_str} | AI Audit: {state.get('verdict')} ({state.get('score')}/100)\n"
             target.write_text(header + content, encoding="utf-8")

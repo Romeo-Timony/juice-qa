@@ -70,10 +70,13 @@ jobs:
       id: backend_tests
       run: |
         set -o pipefail
-        if compgen -G "tests/backend/test_*.py" > /dev/null; then
-          pytest tests/backend/ --alluredir=allure-results 2>&1 | tee backend.log
+        TARGETS=""
+        if [ -d "tests/api" ]; then TARGETS="$TARGETS tests/api"; fi
+        if [ -d "tests/backend" ]; then TARGETS="$TARGETS tests/backend"; fi
+        if [ -n "$TARGETS" ]; then
+          pytest $TARGETS --alluredir=allure-results 2>&1 | tee backend.log
         else
-          echo "No backend tests to run, skipping." | tee backend.log
+          echo "No backend/api tests to run, skipping." | tee backend.log
           exit 0
         fi
 
@@ -82,10 +85,13 @@ jobs:
       id: frontend_tests
       run: |
         set -o pipefail
-        if compgen -G "tests/frontend/test_*.py" > /dev/null; then
-          pytest tests/frontend/ --alluredir=allure-results 2>&1 | tee frontend.log
+        TARGETS=""
+        if [ -d "tests/ui" ]; then TARGETS="$TARGETS tests/ui"; fi
+        if [ -d "tests/frontend" ]; then TARGETS="$TARGETS tests/frontend"; fi
+        if [ -n "$TARGETS" ]; then
+          pytest $TARGETS --alluredir=allure-results 2>&1 | tee frontend.log
         else
-          echo "No frontend tests to run, skipping." | tee frontend.log
+          echo "No frontend/ui tests to run, skipping." | tee frontend.log
           exit 0
         fi
 
