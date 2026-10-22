@@ -123,10 +123,12 @@ jobs:
       id: extract_key
       if: always()
       run: |
-        # Extract JS-XX from qa/js-xx
+        INPUT_KEY="${{ github.event.inputs.issue_key }}"
         BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
-        ISSUE_KEY=$(echo "$BRANCH_NAME" | grep -o -E 'qa/js-[0-9]+' | sed 's/qa\///' | tr 'a-z' 'A-Z')
-        if [ -z "$ISSUE_KEY" ]; then ISSUE_KEY="JS-UNKNOWN"; fi
+        BRANCH_KEY=$(echo "$BRANCH_NAME" | grep -o -E 'qa/js-[0-9]+' | sed 's/qa\///' | tr 'a-z' 'A-Z')
+        ISSUE_KEY="${INPUT_KEY:-$BRANCH_KEY}"
+        if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then ISSUE_KEY="JS-40"; fi
+        echo "Resolved issue key: $ISSUE_KEY"
         echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
 
     - name: Send Report to n8n Webhook
@@ -139,7 +141,8 @@ jobs:
         fi
 
         ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
-        if [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then
+        if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then ISSUE_KEY="JS-40"; fi
+        if false; then
           echo "Issue key could not be determined from branch, skipping webhook notification."
           exit 0
         fi
