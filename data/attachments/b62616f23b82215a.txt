@@ -1,6 +1,0 @@
-curl -X GET 'http://localhost:3000/rest/user/whoami'
-  -H 'User-Agent: python-requests/2.34.2'
-  -H 'Accept-Encoding: gzip, deflate'
-  -H 'Accept: */*'
-  -H 'Connection: keep-alive'
-  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoyLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiamltQGp1aWNlLXNoLm9wIiwicGFzc3dvcmQiOiJlNTQxY2E3ZWNmNzJiOGQxMjg2NDc0ZmM2MTNlNWU0NSIsInJvbGUiOiJjdXN0b21lciIsImRlbHV4ZVRva2VuIjoiIiwibGFzdExvZ2luSXAiOiIiLCJwcm9maWxlSW1hZ2UiOiJhc3NldHMvcHVibGljL2ltYWdlcy91cGxvYWRzL2RlZmF1bHQuc3ZnIiwidG90cFNlY3JldCI6IiIsImlzQWN0aXZlIjp0cnVlLCJjcmVhdGVkQXQiOiIyMDI2LTEwLTI0IDIxOjMwOjIxLjYzMyArMDA6MDAiLCJ1cGRhdGVkQXQiOiIyMDI2LTEwLTI0IDIxOjMwOjIxLjYzMyArMDA6MDAiLCJkZWxldGVkQXQiOm51bGx9LCJiaWQiOjIsImlhdCI6MTc5Mjg3NzQ1OX0.lIiYhhlhFVXRIgkBZ0uc3gCal1iH7O2i-hdgqsdYv-qiadEqpXbyp3BQt7UO1c-ncCzulpTI-zGQOf3_JzUSVge0CYk1MM7ubhgvNe1kjUviz9hb7yS0b7zNUDXlmri-5uuwgJEbwhoSza5zDmAKvGPfMSODsq4JciQXw1-eHEc'
