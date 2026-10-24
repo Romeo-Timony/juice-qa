@@ -1,0 +1,7 @@
+curl -X POST 'http://localhost:3000/api/BasketItems/'
+  -H 'User-Agent: python-requests/2.34.2'
+  -H 'Accept-Encoding: gzip, deflate'
+  -H 'Accept: */*'
+  -H 'Connection: keep-alive'
+  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoyLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiamltQGp1aWNlLXNoLm9wIiwicGFzc3dvcmQiOiJlNTQxY2E3ZWNmNzJiOGQxMjg2NDc0ZmM2MTNlNWU0NSIsInJvbGUiOiJjdXN0b21lciIsImRlbHV4ZVRva2VuIjoiIiwibGFzdExvZ2luSXAiOiIiLCJwcm9maWxlSW1hZ2UiOiJhc3NldHMvcHVibGljL2ltYWdlcy91cGxvYWRzL2RlZmF1bHQuc3ZnIiwidG90cFNlY3JldCI6IiIsImlzQWN0aXZlIjp0cnVlLCJjcmVhdGVkQXQiOiIyMDI2LTEwLTI0IDIwOjU5OjU0LjA2MCArMDA6MDAiLCJ1cGRhdGVkQXQiOiIyMDI2LTEwLTI0IDIwOjU5OjU0LjA2MCArMDA6MDAiLCJkZWxldGVkQXQiOm51bGx9LCJiaWQiOjIsImlhdCI6MTc5Mjg3NTcwN30.uP5ehnyKXauigbdPI0bDyaF815fuia2R7TcqXsuC4zmsKrUb1pkHL5V7JZ0SBUM2N7Puai52Y6KoqZaIcWEgtL3TKSej47xeWkN04KzO16BHWE0kiVXjCZgwFQhHnTrv5cJUvqkxFXc3rPyXTMshpms7H0ik2dK96_CZUdaAehc'
+  -d '{"ProductId": 1, "BasketId": "2", "quantity": 1}'

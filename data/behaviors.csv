@@ -1,4 +1,6 @@
 "BROKEN","EPIC","FAILED","FEATURE","PASSED","SKIPPED","STORY","UNKNOWN"
-"0","OWASP Juice Shop","0","Тестовые персоны и профили пользователей","6","0","Параметризованная верификация учетных записей, ролей и балансов","0"
-"0","OWASP Juice Shop","0","Аутентификация и управление пользователями","10","0","JS-40: Автоматизация REST API регистрации и авторизации (POST /api/Users/)","0"
 "0","OWASP Juice Shop","0","JS-41: Разработка клиентской формы регистрации и валидации полей (/#/register)","12","0","Frontend Angular UI Validation (12 сценариев приёмки)","0"
+"0","OWASP Juice Shop","1","E2E User Journeys: E-Commerce Checkout","0","0","Сквозной процесс покупки с оплатой из цифрового кошелька (Happy Path)","0"
+"0","OWASP Juice Shop","0","Аутентификация и управление пользователями","10","0","JS-40: Автоматизация REST API регистрации и авторизации (POST /api/Users/)","0"
+"1","OWASP Juice Shop","0","E2E User Journeys: Customer Checkout","0","0","Authentification et achat de jus de pomme (Apple Juice) de bout en bout","0"
+"0","OWASP Juice Shop","0","Тестовые персоны и профили пользователей","6","0","Параметризованная верификация учетных записей, ролей и балансов","0"
