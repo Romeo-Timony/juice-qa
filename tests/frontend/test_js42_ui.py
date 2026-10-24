@@ -1,4 +1,4 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-24 21:08:35 UTC | AI Audit: ACCEPT (92/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-24 21:29:36 UTC | AI Audit: ACCEPT (95/100)
 """
 E2E Automated Test Suite for JS-42
 Automates 6 scenarios marked as to-be-automated in Qase TMS.
@@ -19,7 +19,7 @@ class TestJS42UI:
     """Набор сквозных E2E тестов онбординга нового покупателя (JS-42)."""
 
     @allure.title("[E2E][Smoke] Полный приемочный цикл онбординга нового покупателя: регистрация, вход и переход к покупкам")
-    @pytest.mark.qase(id=745)
+    @pytest.mark.qase(id=751)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc01_full_onboarding_cycle(self, page: Page, base_url: str):
@@ -39,12 +39,12 @@ class TestJS42UI:
         with allure.step("3. Выполнение авторизации с созданными учетными данными"):
             login_page.login(email=email, password=password)
         with allure.step("4. Валидация перехода на витрину магазина и доступности интерфейса покупателя"):
-            expect(page).to_have_url(re.compile(r"/#/(search)?"))
+            page.wait_for_url(re.compile(r".*/#/search.*"), timeout=15000)
             token = login_page.get_token_from_storage()
             assert token is not None and len(token) > 20, "JWT токен должен быть сохранен в сессии"
 
     @allure.title("[E2E][Integration] Сквозная консистентность сессии и проверка сохранения Bearer JWT в Web Storage")
-    @pytest.mark.qase(id=746)
+    @pytest.mark.qase(id=752)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc02_session_consistency_jwt_storage(self, page: Page, base_url: str):
@@ -61,6 +61,7 @@ class TestJS42UI:
             login_page.open()
             login_page.login(email=email, password=password)
         with allure.step("3. Валидация структуры JWT токена в localStorage"):
+            page.wait_for_url(re.compile(r".*/#/search.*"), timeout=15000)
             token = login_page.get_token_from_storage()
             assert token is not None, "Токен отсутствует в localStorage"
             parts = token.split(".")
@@ -70,28 +71,25 @@ class TestJS42UI:
             assert password not in storage_dump, "Утечка пароля в открытом виде в localStorage!"
 
     @allure.title("[E2E][Negative] Сквозная обработка дубликата Email при регистрации (HTTP 400 и UI Notification)")
-    @pytest.mark.qase(id=747)
+    @pytest.mark.qase(id=753)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc03_duplicate_email_negative(self, page: Page, base_url: str):
         """Проверка реакции интерфейса при повторной регистрации с тем же email."""
         register_page = RegisterPage(page, base_url)
-        ts = int(time.time() * 1000)
-        email = f"dup_user_{ts}@juice-sh.op"
-        password = "ValidPassword123!"
-        with allure.step("1. Первичная успешная регистрация аккаунта"):
+        email = "admin@juice-sh.op"
+        password = "AdminDuplicatePassword123!"
+        with allure.step(f"1. Попытка регистрации с уже зарегистрированным email ({email})"):
             register_page.open()
+            expect(register_page.email_input).to_be_visible()
             register_page.register(email=email, password=password, answer="Answer123")
-        with allure.step("2. Повторная попытка регистрации с тем же email"):
-            register_page.open()
-            register_page.register(email=email, password=password, answer="Answer123")
-        with allure.step("3. Валидация сообщения об ошибке дубликата на UI"):
-            error_locator = page.locator(".error, simple-snack-bar, .mat-snack-bar-container")
-            expect(error_locator.first).to_be_visible()
-            assert "/#/login" not in page.url or error_locator.count() > 0
+        with allure.step("2. Валидация сообщения об ошибке дубликата на UI"):
+            error_locator = page.locator("simple-snack-bar, .mat-snack-bar-container, .error")
+            expect(error_locator.first).to_be_visible(timeout=10000)
+            expect(error_locator.first).to_contain_text(re.compile(r"Email must be unique|error", re.I))
 
     @allure.title("[E2E][Security] Сквозной сценарий сброса и восстановления пароля по секретному вопросу")
-    @pytest.mark.qase(id=748)
+    @pytest.mark.qase(id=754)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc04_security_password_recovery(self, page: Page, base_url: str):
@@ -106,22 +104,31 @@ class TestJS42UI:
         with allure.step("1. Создание пользователя с контрольным вопросом"):
             register_page.open()
             register_page.register(email=email, password=old_pwd, answer=security_answer)
+            page.wait_for_url(re.compile(r".*/#/login.*"), timeout=15000)
         with allure.step("2. Переход на страницу восстановления пароля"):
-            page.goto(f"{base_url}/#/forgot-password")
-            page.locator("#email").fill(email)
-            page.locator("#securityAnswer").fill(security_answer)
+            page.goto(f"{base_url}/#/forgot-password", wait_until="domcontentloaded")
+            email_input = page.locator("#email")
+            expect(email_input).to_be_visible()
+            email_input.fill(email)
+            email_input.dispatch_event("input")
+            email_input.dispatch_event("change")
+            email_input.dispatch_event("blur")
+            ans_input = page.locator("#securityAnswer")
+            expect(ans_input).to_be_enabled(timeout=15000)
+            ans_input.fill(security_answer)
             page.locator("#newPassword").fill(new_pwd)
             page.locator("#newPasswordRepeat").fill(new_pwd)
             reset_btn = page.locator("#resetButton")
-            if reset_btn.is_enabled():
-                reset_btn.click()
+            expect(reset_btn).to_be_enabled(timeout=5000)
+            reset_btn.click()
+            expect(page.locator("simple-snack-bar, .mat-snack-bar-container, .confirmation").first).to_be_visible(timeout=10000)
         with allure.step("3. Вход с новым паролем через форму логина"):
             login_page.open()
             login_page.login(email=email, password=new_pwd)
-            expect(page).to_have_url(re.compile(r"/#/(search)?"))
+            page.wait_for_url(re.compile(r".*/#/search.*"), timeout=15000)
 
     @allure.title("[E2E][NFR] Валидация SLA производительности полного цикла онбординга (< 3 секунд)")
-    @pytest.mark.qase(id=749)
+    @pytest.mark.qase(id=755)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc05_onboarding_performance_sla(self, page: Page, base_url: str):
@@ -138,13 +145,14 @@ class TestJS42UI:
             register_page.register(email=email, password=password, answer="Answer123")
             login_page.open()
             login_page.login(email=email, password=password)
+            page.wait_for_url(re.compile(r".*/#/search.*"), timeout=15000)
         with allure.step("3. Расчет затраченного времени и проверка SLA"):
             duration = time.perf_counter() - start_time
             allure.attach(f"{duration:.2f} сек", name="Время выполнения онбординга")
             assert duration < 20.0, f"Время выполнения превысило допустимый порог: {duration:.2f}c"
 
     @allure.title("[E2E][Integration] Сквозная авторизация созданного через UI пользователя через прямой API POST /rest/user/login")
-    @pytest.mark.qase(id=750)
+    @pytest.mark.qase(id=756)
     @pytest.mark.e2e
     @pytest.mark.ui
     def test_tc06_direct_api_login_consistency(self, page: Page, base_url: str):
