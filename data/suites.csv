@@ -1,113 +1,5 @@
 "DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
-"Проверка обязательности ответа на секретный вопрос.","2603","[Frontend] Валидация обязательности ответа на секретный вопрос (#securityAnswerControl)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"
-        Полный сквозной пользовательский сценарий E2E:
-        1. Вход покупателя Jim в систему.
-        2. Проверка начального баланса кошелька (>= $100).
-        3. Получение корзины и добавление товара (Apple Juice).
-        4. Оформление заказа с выбором метода оплаты 'wallet'.
-        5. Валидация успешного создания заказа и чека.
-        6. Проверка списания стоимости заказа и начисления кэшбэка.
-        ","41","test_e2e_purchase_flow_with_digital_wallet","tests.e2e.customer_journeys","2026-10-24","failed","2026-10-24","TestCheckoutWalletJourney","test_checkout_wallet_journey","",""
-"
-        Проверка верификации текущего пароля при попытке смены.
-
-        Arrange (Подготовка):
-            Регистрация аккаунта и получение токена.
-        Act (Действие):
-            Вызов смены пароля с неверным параметром current.
-        Assert (Проверка):
-            HTTP 401 Unauthorized, отклонение операции.
-        ","48","Отказ в ротации пароля при неверном текущем пароле -> HTTP 401 Unauthorized","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"
-        Проверка поведения эндпоинта POST /api/Users/ при передаче минимального набора полей.
-
-        Arrange (Подготовка):
-            Подготовка минимального payload с email.
-        Act (Действие):
-            Отправка POST /api/Users/ без вторичных атрибутов.
-        Assert (Проверка):
-            Обработка запроса сервером, возврат статуса успеха и дефолтной роли customer.
-        ","18","Регистрация пользователя с неполным payload -> HTTP 201 с дефолтными значениями схемы","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Проверка исходного состояния кнопки Register при открытии страницы.","2391","[Frontend] Блокировка кнопки Register по умолчанию при пустой форме (#registerButton disabled)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"
-        Аутентификация зарегистрированного пользователя через POST /rest/user/login.
-
-        Arrange (Подготовка):
-            Регистрация нового покупателя.
-        Act (Действие):
-            Вызов эндпоинта логина POST /rest/user/login.
-        Assert (Проверка):
-            HTTP 200 OK, наличие JWT-токена в authentication.token, корректные claims (email, role).
-        ","51","Аутентификация с валидными учетными данными -> HTTP 200 OK и генерация JWT Bearer","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Негативная проверка нижней границы BVA: 4 символа.","2539","[Frontend] Блокировка кнопки Register при пароле короче 5 символов (""Password must be 5-40 characters long"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Проверка ошибки валидации при невалидном формате email без символа @.","2422","[Frontend] Проверка сообщения об ошибке при некорректном формате Email (""Email is not valid"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"
-        GIVEN: Un utilisateur enregistré (Jim) accède à la page de connexion et s'authentifie
-        WHEN:  L'utilisateur ajoute une bouteille d'Apple Juice au panier depuis le catalogue
-        AND:   L'utilisateur valide les étapes de livraison et de paiement (Checkout)
-        THEN:  La commande est confirmée et l'écran de remerciement s'affiche avec succès
-        ","41407","E2E: Connexion utilisateur, ajout de jus de pomme au panier et validation de commande","tests.e2e.customer_journeys","2026-10-24","broken","2026-10-24","TestE2EPurchaseAppleJuice","test_e2e_purchase_apple_juice","",""
-"Проверка контрола mat-slide-toggle для показа шкалы стойкости пароля.","2905","[Frontend] Отображение индикатора надежности пароля при включении тоггла ""Show password advice""","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","9","[Параметризация] Успешная аутентификация персоны: Administrator","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"Параметризованная проверка профиля сессии для покупателей с деньгами и без денег.","18","[Параметризация] Проверка профиля сессии GET /rest/user/whoami для покупателей","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"
-        Проверка обработки SQL-инъекционных векторов в полях логина.
-
-        Arrange (Подготовка):
-            Формирование пейлоада с SQL-инъекцией (' OR 1=1--).
-        Act (Действие):
-            Отправка POST /rest/user/login с инъекционной нагрузкой.
-        Assert (Проверка):
-            Запрос обрабатывается сервером без падения приложения (500), возвращается корректный HTTP статус.
-        ","13","Защита от SQL-инъекций при аутентификации через POST /rest/user/login (OWASP A03)","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Проверка навигации по форме с помощью клавиши Tab (NFR-UI-03).","2364","[Frontend] Доступность формы регистрации по клавиатуре (Tab Navigation & WCAG 2.1 AA)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Параметризованная проверка профиля сессии для покупателей с деньгами и без денег.","14","[Параметризация] Проверка профиля сессии GET /rest/user/whoami для покупателей","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"
-        Смена пароля через GET /rest/user/change-password.
-
-        Arrange (Подготовка):
-            Регистрация аккаунта с исходным паролем и авторизация.
-        Act (Действие):
-            Вызов смены пароля с передачей старого и нового значения.
-        Assert (Проверка):
-            HTTP 200 OK, успешная авторизация с новым паролем.
-        ","87","Успешная ротация пароля аутентифицированного пользователя -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"
-        Проверка уникальности email при регистрации.
-
-        Arrange (Подготовка):
-            Первичная регистрация пользователя с валидными данными.
-        Act (Действие):
-            Повторная отправка запроса регистрации с тем же email.
-        Assert (Проверка):
-            HTTP 400 Bad Request, сообщение об ошибке валидации уникальности.
-        ","86","Повторная регистрация с уже существующим Email -> HTTP 400 Bad Request","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"
-        Проверка доступа к защищенным ресурсам по Bearer-токену.
-
-        Arrange (Подготовка):
-            Регистрация и логин для получения сессионного токена.
-        Act (Действие):
-            Запрос защищенного эндпоинта GET /rest/user/whoami с кукой сессии.
-        Assert (Проверка):
-            HTTP 200 OK, соответствие email авторизованного пользователя.
-        ","49","Валидация Bearer JWT токена в защищенном эндпоинте GET /rest/user/whoami -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Сравнение балансов пользователей: положительный баланс vs нулевой.","31","[Кошелек][Параметризация] Проверка баланса цифрового кошелька: $100 у Jim против $0 у Bender","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"
-        Проверка защиты от несанкционированного входа при передаче неверного пароля.
-
-        Arrange (Подготовка):
-            Регистрация аккаунта с эталонным паролем.
-        Act (Действие):
-            Попытка логина с заведомо ошибочным паролем.
-        Assert (Проверка):
-            HTTP 401 Unauthorized, отсутствие утечки сессионного токена.
-        ","45","Попытка аутентификации с некорректным паролем -> HTTP 401 Unauthorized","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","12","[Параметризация] Успешная аутентификация персоны: Jim","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"Проверка обязательности выбора секретного вопроса: без вопроса кнопка disabled.","2432","[Frontend] Обязательность выбора контрольного вопроса из списка Security Questions (mat-select)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","12","[Параметризация] Успешная аутентификация персоны: Bender","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
-"Проверка блокировки отправки при несовпадении полей пароля и повтора пароля.","2507","[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля (""Passwords do not match"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Проверка навигации по форме с помощью клавиши Tab (NFR-UI-03).","2301","[Frontend] Доступность формы регистрации по клавиатуре (Tab Navigation & WCAG 2.1 AA)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
 "
         Успешная регистрация покупателя через POST /api/Users/.
 
@@ -117,8 +9,96 @@
             Отправка POST-запроса на регистрацию с контрольным вопросом.
         Assert (Проверка):
             HTTP 201 Created, наличие ID пользователя, отсутствие пароля в открытом виде.
-        ","51","Создание учетной записи нового покупателя с валидными параметрами -> HTTP 201 Created","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Проверка безопасности ввода: маскирование символов пароля (NFR-UI-01).","2363","[Frontend] Скрытие ввода пароля (type='password') в полях Password и Repeat Password","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+        ","39","Создание учетной записи нового покупателя с валидными параметрами -> HTTP 201 Created","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","10","[Параметризация] Успешная аутентификация персоны: Jim","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"Сквозной путь: регистрация -> редирект на логин -> вход -> готовность к покупкам.","4932","[E2E][Smoke] Полный приемочный цикл онбординга нового покупателя: регистрация, вход и переход к покупкам","tests.frontend","2026-10-24","failed","2026-10-24","TestJS42UI","test_js42_ui","",""
+"
+        Проверка верификации текущего пароля при попытке смены.
+
+        Arrange (Подготовка):
+            Регистрация аккаунта и получение токена.
+        Act (Действие):
+            Вызов смены пароля с неверным параметром current.
+        Assert (Проверка):
+            HTTP 401 Unauthorized, отклонение операции.
+        ","34","Отказ в ротации пароля при неверном текущем пароле -> HTTP 401 Unauthorized","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка ошибки валидации при невалидном формате email без символа @.","2373","[Frontend] Проверка сообщения об ошибке при некорректном формате Email (""Email is not valid"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Проверка граничных значений: 5 символов и 40 символов.","2531","[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя (BVA: 5-40 символов)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"
+        Проверка обработки SQL-инъекционных векторов в полях логина.
+
+        Arrange (Подготовка):
+            Формирование пейлоада с SQL-инъекцией (' OR 1=1--).
+        Act (Действие):
+            Отправка POST /rest/user/login с инъекционной нагрузкой.
+        Assert (Проверка):
+            Запрос обрабатывается сервером без падения приложения (500), возвращается корректный HTTP статус.
+        ","9","Защита от SQL-инъекций при аутентификации через POST /rest/user/login (OWASP A03)","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"
+        Проверка доступа к защищенным ресурсам по Bearer-токену.
+
+        Arrange (Подготовка):
+            Регистрация и логин для получения сессионного токена.
+        Act (Действие):
+            Запрос защищенного эндпоинта GET /rest/user/whoami с кукой сессии.
+        Assert (Проверка):
+            HTTP 200 OK, соответствие email авторизованного пользователя.
+        ","36","Валидация Bearer JWT токена в защищенном эндпоинте GET /rest/user/whoami -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка контрола mat-slide-toggle для показа шкалы стойкости пароля.","2834","[Frontend] Отображение индикатора надежности пароля при включении тоггла ""Show password advice""","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"
+        Проверка уникальности email при регистрации.
+
+        Arrange (Подготовка):
+            Первичная регистрация пользователя с валидными данными.
+        Act (Действие):
+            Повторная отправка запроса регистрации с тем же email.
+        Assert (Проверка):
+            HTTP 400 Bad Request, сообщение об ошибке валидации уникальности.
+        ","33","Повторная регистрация с уже существующим Email -> HTTP 400 Bad Request","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Сквозной сброс пароля через секретный вопрос и авторизация с новым паролем.","32776","[E2E][Security] Сквозной сценарий сброса и восстановления пароля по секретному вопросу","tests.frontend","2026-10-24","broken","2026-10-24","TestJS42UI","test_js42_ui","",""
+"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","9","[Параметризация] Успешная аутентификация персоны: Administrator","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"Проверка реакции интерфейса при повторной регистрации с тем же email.","34829","[E2E][Negative] Сквозная обработка дубликата Email при регистрации (HTTP 400 и UI Notification)","tests.frontend","2026-10-24","broken","2026-10-24","TestJS42UI","test_js42_ui","",""
+"
+        Проверка поведения эндпоинта POST /api/Users/ при передаче минимального набора полей.
+
+        Arrange (Подготовка):
+            Подготовка минимального payload с email.
+        Act (Действие):
+            Отправка POST /api/Users/ без вторичных атрибутов.
+        Assert (Проверка):
+            Обработка запроса сервером, возврат статуса успеха и дефолтной роли customer.
+        ","12","Регистрация пользователя с неполным payload -> HTTP 201 с дефолтными значениями схемы","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"
+        Аутентификация зарегистрированного пользователя через POST /rest/user/login.
+
+        Arrange (Подготовка):
+            Регистрация нового покупателя.
+        Act (Действие):
+            Вызов эндпоинта логина POST /rest/user/login.
+        Assert (Проверка):
+            HTTP 200 OK, наличие JWT-токена в authentication.token, корректные claims (email, role).
+        ","36","Аутентификация с валидными учетными данными -> HTTP 200 OK и генерация JWT Bearer","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка входа в систему и генерации токена для каждой из 3 тестовых персон.","9","[Параметризация] Успешная аутентификация персоны: Bender","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"
+        GIVEN: Un utilisateur enregistré (Jim) accède à la page de connexion et s'authentifie
+        WHEN:  L'utilisateur ajoute une bouteille d'Apple Juice au panier depuis le catalogue
+        AND:   L'utilisateur valide les étapes de livraison et de paiement (Checkout)
+        THEN:  La commande est confirmée et l'écran de remerciement s'affiche avec succès
+        ","41180","E2E: Connexion utilisateur, ajout de jus de pomme au panier et validation de commande","tests.e2e.customer_journeys","2026-10-24","broken","2026-10-24","TestE2EPurchaseAppleJuice","test_e2e_purchase_apple_juice","",""
+"Проверка обязательности ответа на секретный вопрос.","2662","[Frontend] Валидация обязательности ответа на секретный вопрос (#securityAnswerControl)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Проверка исходного состояния кнопки Register при открытии страницы.","2287","[Frontend] Блокировка кнопки Register по умолчанию при пустой форме (#registerButton disabled)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Сравнение балансов пользователей: положительный баланс vs нулевой.","21","[Кошелек][Параметризация] Проверка баланса цифрового кошелька: $100 у Jim против $0 у Bender","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"Проверка консистентности данных между UI и API: вход через прямой HTTP-запрос.","2794","[E2E][Integration] Сквозная авторизация созданного через UI пользователя через прямой API POST /rest/user/login","tests.frontend","2026-10-24","passed","2026-10-24","TestJS42UI","test_js42_ui","",""
+"Параметризованная проверка профиля сессии для покупателей с деньгами и без денег.","10","[Параметризация] Проверка профиля сессии GET /rest/user/whoami для покупателей","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"
+        Полный сквозной пользовательский сценарий E2E:
+        1. Вход покупателя Jim в систему.
+        2. Проверка начального баланса кошелька (>= $100).
+        3. Получение корзины и добавление товара (Apple Juice).
+        4. Оформление заказа с выбором метода оплаты 'wallet'.
+        5. Валидация успешного создания заказа и чека.
+        6. Проверка списания стоимости заказа и начисления кэшбэка.
+        ","26","test_e2e_purchase_flow_with_digital_wallet","tests.e2e.customer_journeys","2026-10-24","failed","2026-10-24","TestCheckoutWalletJourney","test_checkout_wallet_journey","",""
 "
         Сброс пароля через связку Email и секретного ответа.
 
@@ -128,7 +108,33 @@
             Вызов сброса пароля POST /rest/user/reset-password.
         Assert (Проверка):
             HTTP 200 OK, возможность логина с новым сброшенным паролем.
-        ","69","Сброс пароля через POST /rest/user/reset-password по контрольному вопросу -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
-"Негативная проверка верхней границы BVA: 41 символ.","2540","[Frontend] Блокировка кнопки Register при пароле длиннее 40 символов (BVA: 41 символ)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Проверка граничных значений: 5 символов и 40 символов.","2718","[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя (BVA: 5-40 символов)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
-"Проверка успешной регистрации нового пользователя через RegisterPage.","3997","[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+        ","52","Сброс пароля через POST /rest/user/reset-password по контрольному вопросу -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка скорости прохождения сквозного сценария онбординга.","4902","[E2E][NFR] Валидация SLA производительности полного цикла онбординга (< 3 секунд)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS42UI","test_js42_ui","",""
+"Проверка безопасности ввода: маскирование символов пароля (NFR-UI-01).","2308","[Frontend] Скрытие ввода пароля (type='password') в полях Password и Repeat Password","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Проверка обязательности выбора секретного вопроса: без вопроса кнопка disabled.","2367","[Frontend] Обязательность выбора контрольного вопроса из списка Security Questions (mat-select)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Параметризованная проверка профиля сессии для покупателей с деньгами и без денег.","15","[Параметризация] Проверка профиля сессии GET /rest/user/whoami для покупателей","tests.api.personas","2026-10-24","passed","2026-10-24","TestUserPersonasAPI","test_user_personas_api","",""
+"Проверка блокировки отправки при несовпадении полей пароля и повтора пароля.","2479","[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля (""Passwords do not match"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"
+        Проверка защиты от несанкционированного входа при передаче неверного пароля.
+
+        Arrange (Подготовка):
+            Регистрация аккаунта с эталонным паролем.
+        Act (Действие):
+            Попытка логина с заведомо ошибочным паролем.
+        Assert (Проверка):
+            HTTP 401 Unauthorized, отсутствие утечки сессионного токена.
+        ","31","Попытка аутентификации с некорректным паролем -> HTTP 401 Unauthorized","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Негативная проверка верхней границы BVA: 41 символ.","2487","[Frontend] Блокировка кнопки Register при пароле длиннее 40 символов (BVA: 41 символ)","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Проверка успешной регистрации нового пользователя через RegisterPage.","4028","[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"Негативная проверка нижней границы BVA: 4 символа.","2448","[Frontend] Блокировка кнопки Register при пароле короче 5 символов (""Password must be 5-40 characters long"")","tests.frontend","2026-10-24","passed","2026-10-24","TestJS41UI","test_js41_ui","",""
+"
+        Смена пароля через GET /rest/user/change-password.
+
+        Arrange (Подготовка):
+            Регистрация аккаунта с исходным паролем и авторизация.
+        Act (Действие):
+            Вызов смены пароля с передачей старого и нового значения.
+        Assert (Проверка):
+            HTTP 200 OK, успешная авторизация с новым паролем.
+        ","59","Успешная ротация пароля аутентифицированного пользователя -> HTTP 200 OK","tests.api.auth","2026-10-24","passed","2026-10-24","TestAuthAPI","test_auth_api","",""
+"Проверка безопасного сохранения JWT токена в localStorage после авторизации.","4817","[E2E][Integration] Сквозная консистентность сессии и проверка сохранения Bearer JWT в Web Storage","tests.frontend","2026-10-24","failed","2026-10-24","TestJS42UI","test_js42_ui","",""
