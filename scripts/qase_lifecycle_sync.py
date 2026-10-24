@@ -280,7 +280,13 @@ def run_full_drift_detection(prune: bool = False):
     all_cases = qase.get_all_cases()
     qase_dict = {c["id"]: c for c in all_cases}
 
-    from sync_qase_tests import QaseSyncManager
+    try:
+        from pipeline.sync_qase_tests import QaseSyncManager
+    except ImportError:
+        try:
+            from scripts.pipeline.sync_qase_tests import QaseSyncManager
+        except ImportError:
+            from sync_qase_tests import QaseSyncManager
     mgr = QaseSyncManager()
     local_markers = mgr.scan_local_test_markers()
     all_local_ids = set(local_markers["backend"].keys()) | set(local_markers["frontend"].keys())
@@ -341,7 +347,13 @@ def sync_codebase_to_qase() -> Dict[str, Any]:
     qase = QaseApiClient()
     all_cases = {c["id"]: c for c in qase.get_all_cases()}
 
-    from sync_qase_tests import QaseSyncManager
+    try:
+        from pipeline.sync_qase_tests import QaseSyncManager
+    except ImportError:
+        try:
+            from scripts.pipeline.sync_qase_tests import QaseSyncManager
+        except ImportError:
+            from sync_qase_tests import QaseSyncManager
     mgr = QaseSyncManager()
     local_markers = mgr.scan_local_test_markers()
     all_local_ids = set(local_markers["backend"].keys()) | set(local_markers["frontend"].keys())

@@ -78,19 +78,34 @@ def extract_comment_text(body) -> str:
 
 def is_human_comment(text: str) -> bool:
     t = str(text or "").strip().lower()
-    if t.startswith("h1.") or t.startswith("h2.") or t.startswith("h3.") or "[этап " in t or "n8n_execution_id" in t or "{code" in t or "{noformat" in t or "allure" in t or "требования отклонены" in t:
-        return False
-    if len(t) > 1000:
+    t_clean = re.sub(r'\s+', ' ', t)
+    
+    # Check for any robot/pipeline template markers
+    robot_markers = [
+        "h1.", "h2.", "h3.", "[этап", "этап 1", "этап 2", "этап 3", "этап 4", 
+        "этап 5", "этап 6", "этап 7", "этап 8", "контроль 1", "контроль 2",
+        "quality gate", "dor gate", "n8n_execution_id", "{code", "{noformat",
+        "allure", "требования отклонены", "оценка качества проверок",
+        "текущее решение", "состав проверок", "проверенная задача",
+        "для перехода к генерации"
+    ]
+    for marker in robot_markers:
+        if marker in t_clean:
+            return False
+            
+    # Real human approval comments are short (usually 1-100 characters)
+    if len(t) > 200:
         return False
     return True
 
 def is_approval_comment(text: str) -> bool:
-    t = str(text or "").lower()
-    if "❤️" in text or "❤" in text or ":heart:" in t:
-        return True
+    # 1. MUST be a genuine human comment first (never a robot card)
     if not is_human_comment(text):
         return False
-    return bool(re.search(r'\b(ок|ok|окей|okay|оки|одобрено|approved|подтверждаю|согласовано|да|yes)\b', t, re.IGNORECASE))
+        
+    cleaned = str(text or "").strip().rstrip(".!").strip()
+    # Строго только комментарий «ОК» с больших букв (русская О+К или латинская O+K)
+    return cleaned in ("ОК", "OK")
 
 def extract_delta_requirements(text: str) -> Optional[str]:
     t = str(text or "").strip()
@@ -235,7 +250,7 @@ class PipelineTracker:
             elif has_override:
                 self.state = STATE_STARTED
 
-        # 1.5. Ручное переопределение DoR: пользователь написал "ok" / "❤️"
+        # 1.5. Ручное переопределение DoR: пользователь написал «ОК»
         if self.state == STATE_DOR_REJECTED and not has_override and dor_reject_comment:
             for c in sorted_comments:
                 cid = c.get("id")
@@ -268,7 +283,8 @@ class PipelineTracker:
 
 
         # 2. Остановка на Quality Gate 1 (Этап 5)
-        stage5_comment = next((c for c in sorted_comments if "[Этап 5 из" in extract_comment_text(c.get("body", ""))), None)
+        stage5_comments = [c for c in sorted_comments if "[этап 5 из" in extract_comment_text(c.get("body", "")).lower() or "контроль 1" in extract_comment_text(c.get("body", "")).lower()]
+        stage5_comment = stage5_comments[-1] if stage5_comments else None
         if stage5_comment and self.state in (STATE_STARTED, STATE_DOR_REJECTED):
             self.state = STATE_GATE1_WAITING
             if "gate1_waiting" not in self.sent_notifications:
@@ -276,7 +292,7 @@ class PipelineTracker:
                 self.sent_notifications.add("gate1_waiting")
                 logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 1 (Human-in-the-Loop пауза)")
 
-        # 3. Согласование Quality Gate 1: пользователь написал "ok" / "❤️"
+        # 3. Согласование Quality Gate 1: пользователь написал «ОК»
         if self.state == STATE_GATE1_WAITING and stage5_comment:
             for c in sorted_comments:
                 cid = c.get("id")
@@ -300,8 +316,13 @@ class PipelineTracker:
                         from hitl_review_gate import add_jira_label
                         add_jira_label(self.issue_key, "qa-ready-for-autotests")
 
-                        # Генерация реальных тестов строго по профилю задачи (backend vs frontend)
-                        task_kind = "frontend" if re.search(r"\[\s*frontend\s*\]|frontend|angular|ui\b", summary, re.I) else "backend"
+                        # Генерация реальных тестов строго по профилю задачи (backend vs frontend vs e2e)
+                        if re.search(r"\[\s*e2e\s*\]|\[\s*end-to-end\s*\]|e2e\b|journey|онбординг", summary, re.I):
+                            task_kind = "e2e"
+                        elif re.search(r"\[\s*frontend\s*\]|frontend|angular|ui\b", summary, re.I):
+                            task_kind = "frontend"
+                        else:
+                            task_kind = "backend"
                         with trace("pipeline.gate1_to_gate2", issue_key=self.issue_key, input={"kind": task_kind}, tags=["daemon"]) as tr:
                             from qaops.seams import check_issue_contract, run_design_seam
                             from scaffold_dynamic import fetch_qase_cases, generate_tests
@@ -325,6 +346,10 @@ class PipelineTracker:
                             self.pause(STATE_GATE1_WAITING, "Seam 3: код автотестов не собирается или отклонён аудитором")
                             break
 
+                        # Возобновляем воркфлоу n8n из Gate 1 Wait -> переход к Gate 2
+                        logger.info(f"[{self.issue_key}] 🚀 Возобновление воркфлоу n8n из Gate 1...")
+                        resume_n8n_execution(self.issue_key)
+
                         # Переводим в состояние ожидания согласования Gate 2
                         self.state = STATE_GATE2_WAITING
                         if "gate2_waiting" not in self.sent_notifications:
@@ -333,8 +358,9 @@ class PipelineTracker:
                             logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 2 (Human-in-the-Loop пауза)")
                         break
 
-        # 4. Согласование Quality Gate 2: пользователь написал "ok" / "❤️"
-        stage6_comment = next((c for c in sorted_comments if "[Этап 6 из" in extract_comment_text(c.get("body", ""))), None)
+        # 4. Согласование Quality Gate 2: пользователь написал «ОК»
+        stage6_comments = [c for c in sorted_comments if "[этап 6 из" in extract_comment_text(c.get("body", "")).lower() or "контроль 2" in extract_comment_text(c.get("body", "")).lower()]
+        stage6_comment = stage6_comments[-1] if stage6_comments else None
         if self.state == STATE_GATE2_WAITING and stage6_comment:
             for c in sorted_comments:
                 cid = c.get("id")
@@ -383,11 +409,16 @@ class PipelineTracker:
                                     subprocess.run(["git", "add", "tests/"], cwd=wt_dir, check=False)
                                     subprocess.run(["git", "commit", "-m", f"🤖 Автоматическая генерация тестов для {self.issue_key}"], cwd=wt_dir, check=False)
                                     push_res = subprocess.run(["git", "push", "-u", "--force", "qa", branch_name], cwd=wt_dir, capture_output=True, text=True)
+                                    subprocess.run(["git", "push", "qa", f"{branch_name}:main"], cwd=wt_dir, capture_output=True, text=True)
                                     subprocess.run(["git", "worktree", "remove", "--force", str(wt_dir)], cwd=BASE_DIR.parent, capture_output=True)
                                     if push_res.returncode != 0:
                                         raise RuntimeError(push_res.stderr[-500:])
                                     push_guard.complete({"branch": branch_name})
-                                    logger.info(f"[{self.issue_key}] ✅ Ветка {branch_name} успешно отправлена в репозиторий.")
+                                    logger.info(f"[{self.issue_key}] ✅ Ветка {branch_name} и main успешно обновлены в репозитории.")
+
+                                    # Возобновляем воркфлоу n8n из Gate 2 Wait -> Отчет 7 и запуск GitHub Actions CI/CD
+                                    logger.info(f"[{self.issue_key}] 🚀 Возобновление воркфлоу n8n из Gate 2...")
+                                    resume_n8n_execution(self.issue_key)
                         except Exception as ge:
                             logger.error(f"Git push error: {ge}")
 
@@ -433,21 +464,79 @@ def get_latest_execution_id(comments: list):
             return match.group(1).strip()
     return None
 
-def get_resume_token(exec_id: str):
-    """Waiting webhooks in n8n require ?signature=<resumeToken>; it is only persisted once the execution reaches the Wait node."""
-    try:
-        res = requests.get(
-            f"{N8N_URL}/api/v1/executions/{exec_id}",
-            headers={"X-N8N-API-KEY": N8N_API_KEY},
-            params={"includeData": "true"},
-            timeout=30
-        )
-        res.raise_for_status()
-        execution = res.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Ошибка связи с API n8n для execution {exec_id}: {e}")
-        return None, None
-    return execution.get("status"), (execution.get("data") or {}).get("resumeToken")
+def resume_n8n_execution(issue_key: str, max_retries: int = 5, delay: float = 2.0) -> bool:
+    """Находит ожидающее (status=waiting) execution воркфлоу n8n для задачи issue_key и возобновляет его."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = requests.get(
+                f"{N8N_URL}/api/v1/executions?limit=20",
+                headers={"X-N8N-API-KEY": N8N_API_KEY},
+                timeout=15
+            )
+            if not res.ok:
+                logger.error(f"[{issue_key}] Ошибка запроса executions к n8n ({res.status_code}): {res.text}")
+                time.sleep(delay)
+                continue
+
+            for ex in res.json().get("data", []):
+                eid = ex.get("id")
+                if ex.get("status") != "waiting":
+                    continue
+
+                detail_res = requests.get(
+                    f"{N8N_URL}/api/v1/executions/{eid}?includeData=true",
+                    headers={"X-N8N-API-KEY": N8N_API_KEY},
+                    timeout=20
+                )
+                if not detail_res.ok:
+                    continue
+
+                detail = detail_res.json()
+                run_data = (detail.get("data") or {}).get("resultData", {}).get("runData", {})
+                filter_node = run_data.get("Фильтр: Задача взята в работу")
+                if not filter_node:
+                    continue
+                main_out = filter_node[0].get("data", {}).get("main", [[]])
+                if not main_out or not main_out[0]:
+                    continue
+                item_key = main_out[0][0].get("json", {}).get("issueKey")
+                if item_key != issue_key:
+                    continue
+
+                last_node = (detail.get("data") or {}).get("resultData", {}).get("lastNodeExecuted")
+                resume_token = (detail.get("data") or {}).get("resumeToken")
+                logger.info(f"[{issue_key}] 🎯 Найдено waiting execution n8n ID={eid}, lastNode={last_node}")
+
+                resume_url = None
+                if last_node and last_node in run_data:
+                    node_runs = run_data[last_node]
+                    if node_runs:
+                        resume_url = node_runs[-1].get("metadata", {}).get("resumeUrl")
+
+                if not resume_url and resume_token:
+                    resume_url = f"{N8N_URL}/webhook-waiting/{eid}?signature={resume_token}"
+                elif resume_url:
+                    resume_url = re.sub(r"https?://[^/]+", N8N_URL, resume_url)
+
+                if resume_url:
+                    logger.info(f"[{issue_key}] 🚀 Возобновление execution n8n: {resume_url}")
+                    try:
+                        trig_res = requests.get(resume_url, timeout=20)
+                        if trig_res.status_code == 404:
+                            trig_res = requests.post(resume_url, timeout=20)
+                    except Exception:
+                        trig_res = requests.post(resume_url, timeout=20)
+                    logger.info(f"[{issue_key}] Ответ n8n на resume: {trig_res.status_code}")
+                    if trig_res.ok:
+                        return True
+
+        except Exception as e:
+            logger.error(f"[{issue_key}] Ошибка при поиске/возобновлении execution n8n (попытка {attempt}): {e}")
+
+        time.sleep(delay)
+
+    logger.warning(f"[{issue_key}] ⚠️ Не удалось найти или возобновить waiting execution n8n после {max_retries} попыток.")
+    return False
 
 def update_sqlite(issue_key: str):
     logger.info(f"Обновление локальной базы SQLite для задачи {issue_key}...")

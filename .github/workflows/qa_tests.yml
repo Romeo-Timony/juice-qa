@@ -88,6 +88,7 @@ jobs:
         TARGETS=""
         if [ -d "tests/ui" ]; then TARGETS="$TARGETS tests/ui"; fi
         if [ -d "tests/frontend" ]; then TARGETS="$TARGETS tests/frontend"; fi
+        if [ -d "tests/e2e" ]; then TARGETS="$TARGETS tests/e2e"; fi
         if [ -n "$TARGETS" ]; then
           pytest $TARGETS --alluredir=allure-results 2>&1 | tee frontend.log
         else
@@ -132,25 +133,24 @@ jobs:
         INPUT_KEY="${{ github.event.inputs.issue_key }}"
         BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
         BRANCH_KEY=$(echo "$BRANCH_NAME" | grep -o -E 'qa/js-[0-9]+' | sed 's/qa\///' | tr 'a-z' 'A-Z')
-        ISSUE_KEY="${INPUT_KEY:-$BRANCH_KEY}"
-        if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then ISSUE_KEY="JS-40"; fi
-        echo "Resolved issue key: $ISSUE_KEY"
+        COMMIT_KEY=$(git log -1 --pretty=%B 2>/dev/null | grep -o -E '\bJS-[0-9]+\b' | head -n1)
+        ISSUE_KEY="${INPUT_KEY:-${BRANCH_KEY:-$COMMIT_KEY}}"
+        echo "Resolved issue key: ${ISSUE_KEY:-none}"
         echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
 
     - name: Send Report to n8n Webhook
       if: always()
       run: |
+        ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
+        if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then
+          echo "No targeted Jira issue key found for this run, skipping n8n webhook notification."
+          exit 0
+        fi
+
         if [ "${{ steps.backend_tests.outcome }}" == "success" ] && [ "${{ steps.frontend_tests.outcome }}" == "success" ]; then
           STATUS="success"
         else
           STATUS="failed"
-        fi
-
-        ISSUE_KEY="${{ steps.extract_key.outputs.issue_key }}"
-        if [ -z "$ISSUE_KEY" ] || [ "$ISSUE_KEY" == "JS-UNKNOWN" ]; then ISSUE_KEY="JS-40"; fi
-        if false; then
-          echo "Issue key could not be determined from branch, skipping webhook notification."
-          exit 0
         fi
 
         BACKEND_SUMMARY=$(grep -E '^=+ .* in [0-9.]+s' backend.log 2>/dev/null | tail -n1 | tr -d '=' | xargs)

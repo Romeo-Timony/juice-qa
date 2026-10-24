@@ -423,7 +423,7 @@ def run_audit(issue_key: str = "JS-19", code_gate=None) -> bool:
     for s in ai_verdict.get("strengths", [])[:3]:
         jira_lines.append(f"• {s}")
     jira_lines.append("")
-    jira_lines.append("ℹ️ _Код автотестов успешно проверен AI-аудитором. Для внедрения в проект требуется подтверждение QA Lead (оставьте комментарий ❤️ или «ОК» в задаче)._")
+    jira_lines.append("ℹ️ _Код автотестов успешно проверен AI-аудитором. Для внедрения в проект требуется подтверждение QA Lead (оставьте комментарий «ОК» в задаче)._")
     if code_gate is not None:
         try:
             from qaops.evidence import build_evidence_block
@@ -609,7 +609,13 @@ def run_manual_audit(issue_key: str = "JS-16") -> bool:
     print(f"📋 [GATE 1: MANUAL TEST CASES AUDIT] Независимая валидация тест-кейсов Qase ({issue_key})")
     print("=" * 80)
 
-    from sync_qase_tests import QaseSyncManager
+    try:
+        from pipeline.sync_qase_tests import QaseSyncManager
+    except ImportError:
+        try:
+            from scripts.pipeline.sync_qase_tests import QaseSyncManager
+        except ImportError:
+            from sync_qase_tests import QaseSyncManager
     mgr = QaseSyncManager()
     cases = mgr.fetch_all_cases()
     print(f"📦 Загружено тест-кейсов из Qase TMS: {len(cases)}")
