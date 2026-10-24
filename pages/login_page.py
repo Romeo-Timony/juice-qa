@@ -21,4 +21,8 @@ class LoginPage(BasePage):
 
     @allure.step("Получить Bearer JWT токен из localStorage")
     def get_token_from_storage(self) -> str:
+        try:
+            self.page.wait_for_function("() => !!localStorage.getItem('token')", timeout=10000)
+        except Exception:
+            pass
         return self.page.evaluate("() => localStorage.getItem('token')")
