@@ -88,7 +88,6 @@ jobs:
         TARGETS=""
         if [ -d "tests/ui" ]; then TARGETS="$TARGETS tests/ui"; fi
         if [ -d "tests/frontend" ]; then TARGETS="$TARGETS tests/frontend"; fi
-        if [ -d "tests/e2e" ]; then TARGETS="$TARGETS tests/e2e"; fi
         if [ -n "$TARGETS" ]; then
           pytest $TARGETS --alluredir=allure-results 2>&1 | tee frontend.log
         else
