@@ -1,6 +1,0 @@
-curl -X POST 'http://localhost:3000/rest/user/reset-password'
-  -H 'User-Agent: python-requests/2.34.2'
-  -H 'Accept-Encoding: gzip, deflate'
-  -H 'Accept: */*'
-  -H 'Connection: keep-alive'
-  -d '{"email": "reset_pwd_1792872505032@juice-sh.op", "answer": "SecretAnswerJuice", "new": "ResetPassword789!", "repeat": "ResetPassword789!"}'
