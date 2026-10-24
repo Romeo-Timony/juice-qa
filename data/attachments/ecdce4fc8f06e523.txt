@@ -1,0 +1,6 @@
+curl -X GET 'http://localhost:3000/rest/wallet/balance'
+  -H 'User-Agent: python-requests/2.34.2'
+  -H 'Accept-Encoding: gzip, deflate'
+  -H 'Accept: */*'
+  -H 'Connection: keep-alive'
+  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoyLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiamltQGp1aWNlLXNoLm9wIiwicGFzc3dvcmQiOiJlNTQxY2E3ZWNmNzJiOGQxMjg2NDc0ZmM2MTNlNWU0NSIsInJvbGUiOiJjdXN0b21lciIsImRlbHV4ZVRva2VuIjoiIiwibGFzdExvZ2luSXAiOiIiLCJwcm9maWxlSW1hZ2UiOiJhc3NldHMvcHVibGljL2ltYWdlcy91cGxvYWRzL2RlZmF1bHQuc3ZnIiwidG90cFNlY3JldCI6IiIsImlzQWN0aXZlIjp0cnVlLCJjcmVhdGVkQXQiOiIyMDI2LTEwLTI0IDE5OjU5OjMwLjEwNSArMDA6MDAiLCJ1cGRhdGVkQXQiOiIyMDI2LTEwLTI0IDE5OjU5OjMwLjEwNSArMDA6MDAiLCJkZWxldGVkQXQiOm51bGx9LCJiaWQiOjIsImlhdCI6MTc5Mjg3MjAwM30.VkdqVWKP3x0fxSFKAkhaAyMpm8_riSh_BYlmoEVS_yfDoiqj-Mc8ls4RaMW6YcEwUHCtZ54Zotoargr-fwkNGey3koE92VUBZ1Pc8_5CwGRfbdz-Uv5u_hd7k-Bu719HdsJBpy5_i8sya4qMg-iVQjt3ksoEBkw00BBNoo423R4'
