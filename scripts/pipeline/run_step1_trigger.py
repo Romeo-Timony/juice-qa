@@ -1,31 +1,52 @@
-import os, requests, time, json
+import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv('qa-automation/.env')
-base_url = os.getenv('ATLASSIAN_BASE_URL', 'https://romeo-timony.atlassian.net').rstrip('/')
-email = os.getenv('ATLASSIAN_USER_EMAIL')
-token = os.getenv('ATLASSIAN_API_TOKEN')
-n8n_url = os.getenv('N8N_URL', 'http://201.34.147.33:5678').rstrip('/')
-auth = (email, token)
+sys.stdout.reconfigure(encoding='utf-8')
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-issue_key = 'JS-16'
+sys.path.append(str(BASE_DIR / "scripts" / "pipeline"))
+from task_lifecycle import transition_task, trigger_n8n_dor_gate, get_jira_issues, STATUS_TODO_ID, STATUS_IN_PROGRESS_ID, get_issue
 
-print(f"--- [ШАГ 1] Перевод {issue_key} в статус «В работе» (Transition 21 -> 10046) ---")
-r_trans = requests.post(f"{base_url}/rest/api/2/issue/{issue_key}/transitions", auth=auth, json={"transition": {"id": "21"}})
-print(f"Jira transition response: {r_trans.status_code}")
+# Определяем задачу динамически из аргументов или из бэклога
+issue_key = sys.argv[1] if len(sys.argv) > 1 else None
 
-r_issue = requests.get(f"{base_url}/rest/api/2/issue/{issue_key}?fields=status,summary", auth=auth)
-if r_issue.ok:
-    data = r_issue.json()
-    status_name = data.get('fields', {}).get('status', {}).get('name')
-    status_id = data.get('fields', {}).get('status', {}).get('id')
-    print(f"Текущий статус {issue_key}: {status_name} (ID: {status_id})")
+if not issue_key:
+    # Ищем первую подходящую подзадачу в «К выполнению»
+    issues = get_jira_issues()
+    candidates = [
+        i["key"] for i in issues 
+        if str(i.get("fields", {}).get("status", {}).get("id")) == STATUS_TODO_ID
+        and i["key"] not in ("JS-1",) # исключаем эпик
+    ]
+    if not candidates:
+        print("❌ Не найдено задач в статусе «К выполнению».")
+        sys.exit(1)
+    issue_key = candidates[0]
+    print(f"🎯 Динамически выбрана следующая задача из бэклога: {issue_key}")
 
-print(f"\n--- [ШАГ 2] Отправка события в n8n DoR Gate Webhook ({n8n_url}/webhook/jira-dor-gate) ---")
-payload = {"issueKey": issue_key, "actor": "Roman Timoshenko"}
-try:
-    r_n8n = requests.post(f"{n8n_url}/webhook/jira-dor-gate", json=payload, timeout=10)
-    print(f"n8n Webhook response: {r_n8n.status_code} {r_n8n.text}")
-except Exception as e:
-    print(f"n8n Webhook error: {e}")
+issue_data = get_issue(issue_key)
+status_id = str(issue_data.get("fields", {}).get("status", {}).get("id"))
+status_name = issue_data.get("fields", {}).get("status", {}).get("name")
+summary = issue_data.get("fields", {}).get("summary")
 
+print(f"\n========================================================")
+print(f"🚀 ЗАПУСК ЗАДАЧИ В РАБОТУ: {issue_key}")
+print(f"   Заголовок: {summary}")
+print(f"   Текущий статус: {status_name} (ID: {status_id})")
+print(f"========================================================")
+
+if status_id != STATUS_IN_PROGRESS_ID:
+    print(f"\n--- [ШАГ 1] Динамический перевод {issue_key} в статус «В работе» ---")
+    success = transition_task(issue_key, target_status_id=STATUS_IN_PROGRESS_ID)
+    if not success:
+        print("❌ Ошибка перевода задачи. Прерывание.")
+        sys.exit(1)
+else:
+    print(f"\n--- [ШАГ 1] Задача уже в статусе «В работе» ---")
+
+print(f"\n--- [ШАГ 2] Отправка события в n8n DoR Gate Webhook ---")
+trigger_n8n_dor_gate(issue_key)
+print(f"✅ Задача {issue_key} успешно инициирована!")

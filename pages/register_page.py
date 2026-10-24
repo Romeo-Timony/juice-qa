@@ -35,6 +35,10 @@ class RegisterPage(BasePage):
         self.security_answer_input.fill(answer)
 
         self.register_button.click()
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=4000)
+        except Exception:
+            pass
 
     @allure.step("Проверить доступность кнопки Register (disabled state)")
     def is_register_button_disabled(self) -> bool:

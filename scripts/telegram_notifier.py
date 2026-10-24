@@ -116,7 +116,7 @@ def notify_dor_rejected(issue_key: str, score: int = 0, blockers: str = "", deta
         f"📊 <b>Оценка DoR:</b> {score}%\n"
         f"🚫 <b>Блокеры:</b> {blockers or 'Не выполнен обязательный критерий (C06 - Негативные сценарии)'}\n\n"
         f"↩️ <i>Задача возвращена в статус «К выполнению».</i>\n\n"
-        f"👉 <i>Для ручного переопределения (Override) отправьте реакцию ❤️ или «ОК» в комментарий Jira.</i>"
+        f"👉 <i>Для ручного переопределения (Override) отправьте комментарий «ОК» в Jira.</i>"
     )
     markup = {
         "inline_keyboard": [
@@ -136,11 +136,11 @@ def notify_gate1_waiting(issue_key: str, bdd_count: int, rtm_count: int):
         f"🧪 <b>BDD сценариев сформировано:</b> {bdd_count}\n"
         f"📊 <b>Покрытие матрицы RTM:</b> {rtm_count} требований (100%)\n"
         f"⏳ <b>Статус:</b> Пайплайн на паузе (Human in the Loop).\n\n"
-        f"👉 <i>Для утверждения отправьте в комментарий задачи реакцию ❤️ или «ОК»</i>"
+        f"👉 <i>Для согласования отправьте комментарий «ОК» в задачу Jira.</i>"
     )
     markup = {
         "inline_keyboard": [
-            [{"text": "❤️ Перейти в Jira для согласования", "url": f"https://romeo-timony.atlassian.net/browse/{issue_key}"}]
+            [{"text": "👉 Перейти в Jira для согласования", "url": f"https://romeo-timony.atlassian.net/browse/{issue_key}"}]
         ]
     }
     return send_telegram(text, reply_markup=markup)
@@ -148,7 +148,7 @@ def notify_gate1_waiting(issue_key: str, bdd_count: int, rtm_count: int):
 
 def notify_gate1_approved(issue_key: str, approver: str = "QA Lead"):
     text = (
-        f"❤️ <b>[QUALITY GATE 1] Согласован (Human in the Loop)</b>\n\n"
+        f"✅ <b>[QUALITY GATE 1] Согласован (Human in the Loop)</b>\n\n"
         f"📌 <b>Задача:</b> <code>{issue_key}</code>\n"
         f"👤 <b>Подтвердил:</b> {approver}\n"
         f"✅ <b>Результат:</b> BDD тест-кейсы и матрица RTM приняты.\n"
@@ -165,11 +165,11 @@ def notify_gate2_waiting(issue_key: str, score: int, verdict: str, summary: str)
         f"🤖 <b>Вердикт AI-Аудитора:</b> <b>{verdict}</b> (Оценка: {score}/100)\n"
         f"📋 <b>Резюме:</b> {summary}\n"
         f"⏳ <b>Статус:</b> Ожидание подтверждения QA Lead на промоушн в проект.\n\n"
-        f"👉 <i>Для утверждения промоушена отправьте ❤️ в комментарий задачи</i>"
+        f"👉 <i>Для согласования промоушена отправьте комментарий «ОК» в задачу Jira.</i>"
     )
     markup = {
         "inline_keyboard": [
-            [{"text": "❤️ Согласовать промоушн в Jira", "url": f"https://romeo-timony.atlassian.net/browse/{issue_key}"}]
+            [{"text": "👉 Перейти в Jira для согласования", "url": f"https://romeo-timony.atlassian.net/browse/{issue_key}"}]
         ]
     }
     return send_telegram(text, reply_markup=markup)
@@ -177,7 +177,7 @@ def notify_gate2_waiting(issue_key: str, score: int, verdict: str, summary: str)
 
 def notify_gate2_approved(issue_key: str, approver: str = "QA Lead"):
     text = (
-        f"❤️ <b>[QUALITY GATE 2] Промоушн согласован</b>\n\n"
+        f"✅ <b>[QUALITY GATE 2] Промоушн согласован</b>\n\n"
         f"📌 <b>Задача:</b> <code>{issue_key}</code>\n"
         f"👤 <b>Подтвердил:</b> {approver}\n"
         f"✅ <b>Результат:</b> Автотесты перенесены в боевую ветку проекта.\n"
