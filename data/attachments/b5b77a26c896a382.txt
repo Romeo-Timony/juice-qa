@@ -1,6 +1,0 @@
-curl -X POST 'http://localhost:3000/rest/user/login'
-  -H 'User-Agent: python-requests/2.34.2'
-  -H 'Accept-Encoding: gzip, deflate'
-  -H 'Accept: */*'
-  -H 'Connection: keep-alive'
-  -d '{"email": "whoami_1792877465188@juice-sh.op", "password": "Password123!"}'
