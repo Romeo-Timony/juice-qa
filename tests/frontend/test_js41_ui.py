@@ -1,4 +1,4 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-24 20:07:01 UTC | AI Audit: NEEDS_REVISION (82/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-26 18:55:55 UTC | AI Audit: NEEDS_REVISION (82/100)
 """
 Frontend UI Automated Test Suite for JS-41
 Automates 12 scenarios marked as to-be-automated in Qase TMS.
@@ -18,7 +18,7 @@ class TestJS41UI:
     """Набор из 12 автоматизированных UI-тестов формы регистрации (POM & Playwright)."""
 
     @allure.title("[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email")
-    @pytest.mark.qase(id=733)
+    @pytest.mark.qase(id=811)
     @pytest.mark.ui
     def test_tc01_registration_with_valid_email(self, page: Page, base_url: str):
         """Проверка успешной регистрации нового пользователя через RegisterPage."""
@@ -36,7 +36,7 @@ class TestJS41UI:
             assert "/#/login" in page.url or page.locator("simple-snack-bar, .mat-snack-bar-container").is_visible()
 
     @allure.title("[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя (BVA: 5-40 символов)")
-    @pytest.mark.qase(id=734)
+    @pytest.mark.qase(id=812)
     @pytest.mark.ui
     def test_tc02_password_boundary_validation(self, page: Page, base_url: str):
         """Проверка граничных значений: 5 символов и 40 символов."""
@@ -52,7 +52,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_enabled()
 
     @allure.title("[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля (\"Passwords do not match\")")
-    @pytest.mark.qase(id=735)
+    @pytest.mark.qase(id=813)
     @pytest.mark.ui
     def test_tc03_password_mismatch_error(self, page: Page, base_url: str):
         """Проверка блокировки отправки при несовпадении полей пароля и повтора пароля."""
@@ -68,7 +68,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Блокировка кнопки Register по умолчанию при пустой форме (#registerButton disabled)")
-    @pytest.mark.qase(id=736)
+    @pytest.mark.qase(id=814)
     @pytest.mark.ui
     def test_tc04_default_register_button_disabled(self, page: Page, base_url: str):
         """Проверка исходного состояния кнопки Register при открытии страницы."""
@@ -79,7 +79,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Проверка сообщения об ошибке при некорректном формате Email (\"Email is not valid\")")
-    @pytest.mark.qase(id=737)
+    @pytest.mark.qase(id=815)
     @pytest.mark.ui
     def test_tc05_invalid_email_format(self, page: Page, base_url: str):
         """Проверка ошибки валидации при невалидном формате email без символа @."""
@@ -93,7 +93,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Блокировка кнопки Register при пароле короче 5 символов (\"Password must be 5-40 characters long\")")
-    @pytest.mark.qase(id=738)
+    @pytest.mark.qase(id=816)
     @pytest.mark.ui
     def test_tc06_password_too_short(self, page: Page, base_url: str):
         """Негативная проверка нижней границы BVA: 4 символа."""
@@ -109,7 +109,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Блокировка кнопки Register при пароле длиннее 40 символов (BVA: 41 символ)")
-    @pytest.mark.qase(id=739)
+    @pytest.mark.qase(id=817)
     @pytest.mark.ui
     def test_tc07_password_too_long(self, page: Page, base_url: str):
         """Негативная проверка верхней границы BVA: 41 символ."""
@@ -126,7 +126,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Отображение индикатора надежности пароля при включении тоггла \"Show password advice\"")
-    @pytest.mark.qase(id=740)
+    @pytest.mark.qase(id=818)
     @pytest.mark.ui
     def test_tc08_password_advice_toggle(self, page: Page, base_url: str):
         """Проверка контрола mat-slide-toggle для показа шкалы стойкости пароля."""
@@ -141,7 +141,7 @@ class TestJS41UI:
                 expect(page.locator("mat-slide-toggle")).to_be_visible()
 
     @allure.title("[Frontend] Обязательность выбора контрольного вопроса из списка Security Questions (mat-select)")
-    @pytest.mark.qase(id=741)
+    @pytest.mark.qase(id=819)
     @pytest.mark.ui
     def test_tc09_security_question_mandatory(self, page: Page, base_url: str):
         """Проверка обязательности выбора секретного вопроса: без вопроса кнопка disabled."""
@@ -157,7 +157,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Валидация обязательности ответа на секретный вопрос (#securityAnswerControl)")
-    @pytest.mark.qase(id=742)
+    @pytest.mark.qase(id=820)
     @pytest.mark.ui
     def test_tc10_security_answer_mandatory(self, page: Page, base_url: str):
         """Проверка обязательности ответа на секретный вопрос."""
@@ -174,7 +174,7 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     @allure.title("[Frontend] Скрытие ввода пароля (type='password') в полях Password и Repeat Password")
-    @pytest.mark.qase(id=743)
+    @pytest.mark.qase(id=821)
     @pytest.mark.ui
     def test_tc11_password_masking_security(self, page: Page, base_url: str):
         """Проверка безопасности ввода: маскирование символов пароля (NFR-UI-01)."""
@@ -186,7 +186,7 @@ class TestJS41UI:
             expect(register_page.repeat_password_input).to_have_attribute("type", "password")
 
     @allure.title("[Frontend] Доступность формы регистрации по клавиатуре (Tab Navigation & WCAG 2.1 AA)")
-    @pytest.mark.qase(id=744)
+    @pytest.mark.qase(id=822)
     @pytest.mark.ui
     def test_tc12_keyboard_tab_navigation(self, page: Page, base_url: str):
         """Проверка навигации по форме с помощью клавиши Tab (NFR-UI-03)."""
