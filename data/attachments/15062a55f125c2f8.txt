@@ -1,6 +1,0 @@
-curl -X POST 'http://localhost:3000/api/Users/'
-  -H 'User-Agent: python-requests/2.34.2'
-  -H 'Accept-Encoding: gzip, deflate'
-  -H 'Accept: */*'
-  -H 'Connection: keep-alive'
-  -d '{"email": "reset_user_1792927406549@juice-sh.op", "password": "InitialPass123!", "securityQuestion": {"id": 1, "question": "Your eldest siblings middle name?", "createdAt": "2021-01-01T00:00:00.000Z", "updatedAt": "2021-01-01T00:00:00.000Z"}, "SecurityQuestionId": 1, "securityAnswer": "SecretAnswer"}'
