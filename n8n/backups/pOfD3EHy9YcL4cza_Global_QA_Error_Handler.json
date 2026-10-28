@@ -1,0 +1,198 @@
+{
+  "id": "pOfD3EHy9YcL4cza",
+  "name": "Global QA Error Handler",
+  "description": null,
+  "active": true,
+  "activeVersionId": "eaf05511-f74c-46c0-ad08-a5582b70fd5f",
+  "createdAt": "2026-10-25T17:35:48.646Z",
+  "updatedAt": "2026-10-25T17:35:48.646Z",
+  "isArchived": false,
+  "versionId": "eaf05511-f74c-46c0-ad08-a5582b70fd5f",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "err-trigger-node-01",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "err-format-code-02",
+      "name": "Format Error Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst err = $json.execution?.error || {};\nconst wf = $json.workflow || {};\nconst exec = $json.execution || {};\n\nconst wfName = wf.name || 'Unknown Workflow';\nconst lastNode = err.node?.name || err.lastNodeExecuted || 'Unknown Node';\nconst errMsg = err.message || 'Unhandled error occurred';\nconst execId = exec.id || 'N/A';\nconst execUrl = `${exec.url || 'http://201.34.147.33:5678/execution/' + execId}`;\n\nconst text = `🚨 <b>[n8n FLOW FAILURE] Сбой в оркестраторе QA</b>\\n\\n` +\n  `📁 <b>Воркфлоу:</b> ${wfName}\\n` +\n  `🛑 <b>Упавший узел:</b> <code>${lastNode}</code>\\n` +\n  `🆔 <b>Execution ID:</b> <code>#${execId}</code>\\n\\n` +\n  `💬 <b>Ошибка:</b>\\n<code>${errMsg.substring(0, 500)}</code>\\n\\n` +\n  `🔗 <a href=\"${execUrl}\"><b>👉 Открыть упавший прогон в n8n</b></a>`;\n\nreturn [{ json: { text, chat_id: '1434200911' } }];\n"
+      }
+    },
+    {
+      "id": "err-tg-send-03",
+      "name": "Telegram: Send Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8463540623:AAHmW9uuff8C_XQDk4cLby1GoVyc7-zo4Ek/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, parse_mode: 'HTML', disable_web_page_preview: true }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Card": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "pOfD3EHy9YcL4cza",
+      "projectId": "iLLAfMZoycBmLUIT",
+      "project": {
+        "id": "iLLAfMZoycBmLUIT",
+        "name": "Roman Timoshenko <roman.timoshenko@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T07:46:02.729Z",
+        "updatedAt": "2026-10-07T07:53:00.911Z"
+      },
+      "createdAt": "2026-10-25T17:35:48.658Z",
+      "updatedAt": "2026-10-25T17:35:48.658Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "eaf05511-f74c-46c0-ad08-a5582b70fd5f",
+    "workflowId": "pOfD3EHy9YcL4cza",
+    "nodes": [
+      {
+        "id": "err-trigger-node-01",
+        "name": "Error Trigger",
+        "type": "n8n-nodes-base.errorTrigger",
+        "typeVersion": 1,
+        "position": [
+          200,
+          300
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "err-format-code-02",
+        "name": "Format Error Card",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          440,
+          300
+        ],
+        "parameters": {
+          "jsCode": "\nconst err = $json.execution?.error || {};\nconst wf = $json.workflow || {};\nconst exec = $json.execution || {};\n\nconst wfName = wf.name || 'Unknown Workflow';\nconst lastNode = err.node?.name || err.lastNodeExecuted || 'Unknown Node';\nconst errMsg = err.message || 'Unhandled error occurred';\nconst execId = exec.id || 'N/A';\nconst execUrl = `${exec.url || 'http://201.34.147.33:5678/execution/' + execId}`;\n\nconst text = `🚨 <b>[n8n FLOW FAILURE] Сбой в оркестраторе QA</b>\\n\\n` +\n  `📁 <b>Воркфлоу:</b> ${wfName}\\n` +\n  `🛑 <b>Упавший узел:</b> <code>${lastNode}</code>\\n` +\n  `🆔 <b>Execution ID:</b> <code>#${execId}</code>\\n\\n` +\n  `💬 <b>Ошибка:</b>\\n<code>${errMsg.substring(0, 500)}</code>\\n\\n` +\n  `🔗 <a href=\"${execUrl}\"><b>👉 Открыть упавший прогон в n8n</b></a>`;\n\nreturn [{ json: { text, chat_id: '1434200911' } }];\n"
+        }
+      },
+      {
+        "id": "err-tg-send-03",
+        "name": "Telegram: Send Error Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          680,
+          300
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8463540623:AAHmW9uuff8C_XQDk4cLby1GoVyc7-zo4Ek/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, parse_mode: 'HTML', disable_web_page_preview: true }) }}"
+        }
+      }
+    ],
+    "connections": {
+      "Error Trigger": {
+        "main": [
+          [
+            {
+              "node": "Format Error Card",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Error Card": {
+        "main": [
+          [
+            {
+              "node": "Telegram: Send Error Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Roman Timoshenko",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-25T17:35:48.663Z",
+    "updatedAt": "2026-10-25T17:35:48.663Z",
+    "workflowPublishHistory": [
+      {
+        "id": 271,
+        "workflowId": "pOfD3EHy9YcL4cza",
+        "versionId": "eaf05511-f74c-46c0-ad08-a5582b70fd5f",
+        "event": "activated",
+        "userId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-25T17:35:48.978Z"
+      }
+    ]
+  }
+}

@@ -34,7 +34,7 @@ class Settings:
 
     gemini_key: str = os.getenv("N8N_ASSISTANT_KEY") or os.getenv("GEMINI_API_KEY", "")
     judge_model: str = os.getenv("QAOPS_JUDGE_MODEL") or os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
-    judge_backend: str = os.getenv("QAOPS_JUDGE_BACKEND", "deepeval")
+    judge_backend: str = os.getenv("QAOPS_JUDGE_BACKEND", "native")
 
     langfuse_host: str = (os.getenv("LANGFUSE_HOST") or os.getenv("LANGFUSE_BASE_URL") or "https://cloud.langfuse.com").rstrip("/")
     langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")

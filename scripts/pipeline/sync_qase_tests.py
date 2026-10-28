@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 
 sys.stdout.reconfigure(encoding='utf-8')
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 QASE_API_TOKEN = os.getenv("QASE_API_TOKEN")

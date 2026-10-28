@@ -140,7 +140,15 @@ def cmd_start(args):
         target_key = todo_issues[0]["key"]
         print(f"🎯 Автоматически выбрана следующая задача из бэклога: {target_key}")
 
-    # 1. Читаем реальное состояние задачи
+    # 0. SDET Pre-flight Infrastructure & Readiness Gate
+    print("\n🏥 Проверка готовности инфраструктуры и сервисов (SDET Pre-flight Gate)...")
+    from qaops.health import run_all_health_checks
+    report = run_all_health_checks()
+    if not report.is_healthy:
+        print(report.format_console())
+        print("🛑 Запуск задачи заблокирован: обнаружены сбои в критических службах.")
+        return
+    print("✅ Все службы, базы данных и оркестратор готовы к выполнению.")
     issue = get_issue(target_key)
     fields = issue["fields"]
     curr_status_name = fields.get("status", {}).get("name")

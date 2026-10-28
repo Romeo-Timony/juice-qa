@@ -12,20 +12,16 @@ class BasePage:
 
     def dismiss_banners(self):
         try:
-            welcome_btn = self.page.locator("button.close-dialog, button[aria-label='Close Welcome Banner']").first
-            if welcome_btn.is_visible():
-                welcome_btn.click()
-            else:
-                welcome_btn.click(timeout=1000)
+            btn = self.page.locator("button[aria-label='Close Welcome Banner'], button.close-dialog").first
+            btn.wait_for(state="visible", timeout=4000)
+            btn.click()
         except Exception:
             pass
 
         try:
             cookie_btn = self.page.locator("a.cc-dismiss, a[aria-label='dismiss cookie message']").first
-            if cookie_btn.is_visible():
-                cookie_btn.click()
-            else:
-                cookie_btn.click(timeout=1000)
+            cookie_btn.wait_for(state="visible", timeout=2000)
+            cookie_btn.click()
         except Exception:
             pass
 

@@ -1,0 +1,151 @@
+{
+  "id": "thV2PVl0ULlS0wxv",
+  "name": "Test-Fetch-Check",
+  "description": null,
+  "active": true,
+  "activeVersionId": "b4a88ba5-08f4-4fc8-a7fe-b0870bd60629",
+  "createdAt": "2026-10-09T07:04:13.288Z",
+  "updatedAt": "2026-10-09T07:04:13.288Z",
+  "isArchived": false,
+  "versionId": "b4a88ba5-08f4-4fc8-a7fe-b0870bd60629",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "name": "Webhook",
+      "webhookId": "test-fetch-check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-fetch-check",
+        "responseMode": "lastNode"
+      },
+      "id": "6769a8bc-752a-406e-a5c0-28a4625b7c2e"
+    },
+    {
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        100
+      ],
+      "parameters": {
+        "jsCode": "\ntry {\n  const r = await fetch('https://api.qase.io/v1/suite/JS?limit=1', { headers: { Token: 'test' } });\n  return [{ json: { fetchWorks: true, status: r.status } }];\n} catch(e) {\n  return [{ json: { fetchWorks: false, error: e.message } }];\n}\n"
+      },
+      "id": "11a39445-759f-4246-a6b4-61f160a97c24"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "thV2PVl0ULlS0wxv",
+      "projectId": "iLLAfMZoycBmLUIT",
+      "project": {
+        "id": "iLLAfMZoycBmLUIT",
+        "name": "Roman Timoshenko <roman.timoshenko@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T07:46:02.729Z",
+        "updatedAt": "2026-10-07T07:53:00.911Z"
+      },
+      "createdAt": "2026-10-09T07:04:13.300Z",
+      "updatedAt": "2026-10-09T07:04:13.300Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "b4a88ba5-08f4-4fc8-a7fe-b0870bd60629",
+    "workflowId": "thV2PVl0ULlS0wxv",
+    "nodes": [
+      {
+        "name": "Webhook",
+        "webhookId": "test-fetch-check",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          100,
+          100
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "test-fetch-check",
+          "responseMode": "lastNode"
+        },
+        "id": "6769a8bc-752a-406e-a5c0-28a4625b7c2e"
+      },
+      {
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          300,
+          100
+        ],
+        "parameters": {
+          "jsCode": "\ntry {\n  const r = await fetch('https://api.qase.io/v1/suite/JS?limit=1', { headers: { Token: 'test' } });\n  return [{ json: { fetchWorks: true, status: r.status } }];\n} catch(e) {\n  return [{ json: { fetchWorks: false, error: e.message } }];\n}\n"
+        },
+        "id": "11a39445-759f-4246-a6b4-61f160a97c24"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Roman Timoshenko",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-09T07:04:13.309Z",
+    "updatedAt": "2026-10-09T07:04:13.309Z",
+    "workflowPublishHistory": [
+      {
+        "id": 130,
+        "workflowId": "thV2PVl0ULlS0wxv",
+        "versionId": "b4a88ba5-08f4-4fc8-a7fe-b0870bd60629",
+        "event": "activated",
+        "userId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-09T07:04:13.780Z"
+      }
+    ]
+  }
+}

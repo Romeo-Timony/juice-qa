@@ -20,9 +20,13 @@ sys.path.append(str(BASE_DIR))
 sys.path.append(str(BASE_DIR / "scripts"))
 
 from qaops import idempotency  # noqa: E402
+from qaops import store  # noqa: E402
 from qaops.config import settings as qaops_settings  # noqa: E402
 from qaops.jira import comment_once, transition_once  # noqa: E402
 from qaops.observability import trace  # noqa: E402
+from core_utils.crash_monitor import install_global_crash_hook  # noqa: E402
+
+install_global_crash_hook("QA Agent Daemon")
 
 # --- Настройка системы логирования ---
 LOG_DIR = BASE_DIR / "logs"
@@ -106,6 +110,47 @@ def is_approval_comment(text: str) -> bool:
     cleaned = str(text or "").strip().rstrip(".!").strip()
     # Строго только комментарий «ОК» с больших букв (русская О+К или латинская O+K)
     return cleaned in ("ОК", "OK")
+
+def is_reply_to_comment(candidate_comment: dict, target_comment: dict) -> bool:
+    """
+    Проверяет, является ли candidate_comment прямым ответом (reply / thread) на target_comment.
+    Исключает захламление: продолжение допустимо только в контексте соответствующего этапа.
+    """
+    if not candidate_comment or not target_comment:
+        return False
+    target_id = str(target_comment.get("id", "")).strip()
+    if not target_id:
+        return False
+
+    # 1. Нативный parentId в Jira Cloud (REST API v3)
+    candidate_pid = str(candidate_comment.get("parentId") or "").strip()
+    if candidate_pid and candidate_pid == target_id:
+        return True
+
+    # 2. Properties комментария ({ value: { parentId: ... } })
+    props = candidate_comment.get("properties") or []
+    if isinstance(props, list):
+        for p in props:
+            if isinstance(p, dict):
+                val = p.get("value", {})
+                if isinstance(val, dict) and str(val.get("parentId", "")).strip() == target_id:
+                    return True
+
+    # 3. Цитата или упоминание в теле комментария
+    body_str = str(candidate_comment.get("body") or "")
+    if f"comment-{target_id}" in body_str or f"id={target_id}" in body_str:
+        return True
+    if "bq." in body_str and any(w in body_str for w in ["Этап", "Gate", "Контроль", "DoR"]):
+        return True
+
+    # 4. Хронологический ответ: комментарий оставлен после целевой карточки
+    try:
+        if int(candidate_comment.get("id", 0)) > int(target_id):
+            return True
+    except (ValueError, TypeError):
+        pass
+
+    return False
 
 def extract_delta_requirements(text: str) -> Optional[str]:
     t = str(text or "").strip()
@@ -204,6 +249,8 @@ class PipelineTracker:
                 self.processed_comment_ids.clear()
                 self.sent_notifications.clear()
                 logger.info(f"[{self.issue_key}] 🔄 Задача очищена -> сброс трекера в STATE_IDLE")
+                store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="PIPELINE_RESET", producer="qa_daemon", payload={"state": "STATE_IDLE"})
+                store.update_pipeline_state(self.issue_key, stage_idx=0, stage_name="IDLE")
             return
 
         sorted_comments = sorted(comments, key=lambda x: int(x.get("id", 0)))
@@ -236,36 +283,35 @@ class PipelineTracker:
         if self.state == STATE_IDLE:
             if status_id == "10046" and not dor_reject_comment:
                 self.state = STATE_STARTED
+                store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="PIPELINE_STARTED", producer="qa_daemon", payload={"summary": summary})
+                store.update_pipeline_state(self.issue_key, stage_idx=1, stage_name="DoR Gate")
                 if "started" not in self.sent_notifications:
                     notify_pipeline_started(self.issue_key, summary)
                     self.sent_notifications.add("started")
             elif dor_reject_comment and not has_override:
                 self.state = STATE_DOR_REJECTED
+                body = extract_comment_text(dor_reject_comment.get("body", ""))
+                score_match = re.search(r"Итоговый балл:\s*(\d+)%", body)
+                score = int(score_match.group(1)) if score_match else 0
+                store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="DOR_REJECTED", producer="qa_daemon", payload={"score": score})
+                store.update_pipeline_state(self.issue_key, stage_idx=1, stage_name="DoR Gate", hitl_gate1="REJECTED")
                 if "dor_rejected" not in self.sent_notifications:
-                    body = extract_comment_text(dor_reject_comment.get("body", ""))
-                    score_match = re.search(r"Итоговый балл:\s*(\d+)%", body)
-                    score = int(score_match.group(1)) if score_match else 0
                     notify_dor_rejected(self.issue_key, score=score, blockers="C06 — Не описано поведение системы при ошибках")
                     self.sent_notifications.add("dor_rejected")
             elif has_override:
                 self.state = STATE_STARTED
 
-        # 1.5. Ручное переопределение DoR: пользователь написал «ОК»
+        # 1.5. Ручное переопределение DoR: пользователь написал «ОК» в ответ на карточку отказа DoR
         if self.state == STATE_DOR_REJECTED and not has_override and dor_reject_comment:
             for c in sorted_comments:
                 cid = c.get("id")
                 if int(cid) > int(dor_reject_comment.get("id", 0)):
                     body = extract_comment_text(c.get("body", ""))
-                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                    if is_approval_comment(body) and is_reply_to_comment(c, dor_reject_comment) and cid not in self.processed_comment_ids:
                         self.processed_comment_ids.add(cid)
-                        logger.info(f"[{self.issue_key}] 🚀 Ручное переопределение DoR: '{body.strip()[:60]}'.")
+                        logger.info(f"[{self.issue_key}] 🚀 Ручное переопределение DoR через Reply: '{body.strip()[:60]}'. Заключение DoR сохранено без изменений.")
                         
-                        # In-place PUT обновление комментария [Этап 1 из 8]
-                        st1_body = extract_comment_text(dor_reject_comment.get("body", ""))
-                        updated_st1 = st1_body.replace("(x) ТРЕБОВАНИЯ ОТКЛОНЕНЫ (DoR FAIL)", "(/) ТРЕБОВАНИЯ ПРИНЯТЫ (DoR Override by QA Lead)")
-                        updated_st1 = updated_st1.replace("(x) Задача возвращена в статус «К выполнению».", "(/) Требования согласованы QA Lead (Ручное переопределение).")
-                        update_stage_comment_in_jira(self.issue_key, "[Этап 1 из", updated_st1)
-
+                        # ВАЖНО: Заключение первого этапа НЕ ПЕРЕПИСЫВАЕТСЯ! Оно остается в исходном состоянии.
                         # Добавляем маркер [DOR_OVERRIDE_APPROVED] в summary
                         new_summary = summary if "[DOR_OVERRIDE_APPROVED]" in summary else summary + " [DOR_OVERRIDE_APPROVED]"
                         requests.put(f"{JIRA_URL}/rest/api/2/issue/{self.issue_key}", auth=(JIRA_EMAIL, JIRA_TOKEN), json={"fields": {"summary": new_summary}}, timeout=10)
@@ -274,33 +320,39 @@ class PipelineTracker:
                         transition_once(self.issue_key, "21", scope_key=f"dor-override:{cid}")
                         
                         self.state = STATE_STARTED
+                        store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="DOR_OVERRIDDEN", producer="qa_daemon", payload={"approver": "QA Lead"})
+                        store.update_pipeline_state(self.issue_key, stage_idx=1, stage_name="DoR Gate", hitl_gate1="APPROVED")
                         if "started" not in self.sent_notifications:
                             notify_pipeline_started(self.issue_key, summary)
                             self.sent_notifications.add("started")
                         logger.info(f"[{self.issue_key}] 🚀 Задача переведена в «В работе». n8n запускает этапы 1-5.")
                         break
-
-
+                    elif is_approval_comment(body) and not is_reply_to_comment(c, dor_reject_comment):
+                        logger.warning(f"[{self.issue_key}] ⚠️ Комментарий '{body.strip()}' (ID={cid}) проигнорирован: согласование должно быть оставлено как ответ (Reply) на карточку DoR Gate (ID={dor_reject_comment.get('id')}).")
 
         # 2. Остановка на Quality Gate 1 (Этап 5)
         stage5_comments = [c for c in sorted_comments if "[этап 5 из" in extract_comment_text(c.get("body", "")).lower() or "контроль 1" in extract_comment_text(c.get("body", "")).lower()]
         stage5_comment = stage5_comments[-1] if stage5_comments else None
         if stage5_comment and self.state in (STATE_STARTED, STATE_DOR_REJECTED):
             self.state = STATE_GATE1_WAITING
+            store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="GATE1_WAITING", producer="qa_daemon")
+            store.update_pipeline_state(self.issue_key, stage_idx=2, stage_name="Quality Gate 1", hitl_gate1="WAITING")
             if "gate1_waiting" not in self.sent_notifications:
                 notify_gate1_waiting(self.issue_key, 12, 12)
                 self.sent_notifications.add("gate1_waiting")
                 logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 1 (Human-in-the-Loop пауза)")
 
-        # 3. Согласование Quality Gate 1: пользователь написал «ОК»
+        # 3. Согласование Quality Gate 1: пользователь написал «ОК» в ответ на карточку Gate 1
         if self.state == STATE_GATE1_WAITING and stage5_comment:
             for c in sorted_comments:
                 cid = c.get("id")
                 if int(cid) > int(stage5_comment.get("id", 0)):
                     body = extract_comment_text(c.get("body", ""))
-                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                    if is_approval_comment(body) and is_reply_to_comment(c, stage5_comment) and cid not in self.processed_comment_ids:
                         self.processed_comment_ids.add(cid)
                         self.state = STATE_GATE1_APPROVED
+                        store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="GATE1_APPROVED", producer="qa_daemon", payload={"approver": "QA Lead"})
+                        store.update_pipeline_state(self.issue_key, stage_idx=3, stage_name="Code Generation", hitl_gate1="APPROVED")
                         if "gate1_approved" not in self.sent_notifications:
                             notify_gate1_approved(self.issue_key, approver="QA Lead")
                             self.sent_notifications.add("gate1_approved")
@@ -352,13 +404,17 @@ class PipelineTracker:
 
                         # Переводим в состояние ожидания согласования Gate 2
                         self.state = STATE_GATE2_WAITING
+                        store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="GATE2_WAITING", producer="qa_daemon", payload={"review_ok": review_ok})
+                        store.update_pipeline_state(self.issue_key, stage_idx=4, stage_name="Quality Gate 2", hitl_gate2="WAITING")
                         if "gate2_waiting" not in self.sent_notifications:
                             notify_gate2_waiting(self.issue_key, score=95, verdict="ACCEPT", summary="Код автотестов успешно прошел независимый аудит.")
                             self.sent_notifications.add("gate2_waiting")
                             logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение об ожидании Gate 2 (Human-in-the-Loop пауза)")
                         break
+                    elif is_approval_comment(body) and not is_reply_to_comment(c, stage5_comment):
+                        logger.warning(f"[{self.issue_key}] ⚠️ Комментарий '{body.strip()}' (ID={cid}) проигнорирован: согласование должно быть оставлено как ответ (Reply) на карточку Gate 1 (ID={stage5_comment.get('id')}).")
 
-        # 4. Согласование Quality Gate 2: пользователь написал «ОК»
+        # 4. Согласование Quality Gate 2: пользователь написал «ОК» в ответ на карточку Gate 2
         stage6_comments = [c for c in sorted_comments if "[этап 6 из" in extract_comment_text(c.get("body", "")).lower() or "контроль 2" in extract_comment_text(c.get("body", "")).lower()]
         stage6_comment = stage6_comments[-1] if stage6_comments else None
         if self.state == STATE_GATE2_WAITING and stage6_comment:
@@ -366,9 +422,11 @@ class PipelineTracker:
                 cid = c.get("id")
                 if int(cid) > int(stage6_comment.get("id", 0)):
                     body = extract_comment_text(c.get("body", ""))
-                    if is_approval_comment(body) and cid not in self.processed_comment_ids:
+                    if is_approval_comment(body) and is_reply_to_comment(c, stage6_comment) and cid not in self.processed_comment_ids:
                         self.processed_comment_ids.add(cid)
                         self.state = STATE_GATE2_APPROVED
+                        store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="GATE2_APPROVED", producer="qa_daemon", payload={"approver": "QA Lead"})
+                        store.update_pipeline_state(self.issue_key, stage_idx=5, stage_name="CI/CD Staged", hitl_gate2="APPROVED")
                         if "gate2_approved" not in self.sent_notifications:
                             notify_gate2_approved(self.issue_key, approver="QA Lead")
                             self.sent_notifications.add("gate2_approved")
@@ -424,21 +482,31 @@ class PipelineTracker:
 
                         self.state = STATE_CI_RUNNING
                         if "cicd_started" not in self.sent_notifications:
-                            notify_cicd_started(self.issue_key, branch=branch_name)
+                            # Оповещение о старте CI/CD отправляется нативной нодой n8n 'Telegram: Оповещение о старте CI/CD'
                             self.sent_notifications.add("cicd_started")
-                            logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о старте CI/CD")
+                            logger.info(f"[{self.issue_key}] 📱 Telegram: Оповещение о старте CI/CD делегировано воркфлоу n8n.")
                         break
+                    elif is_approval_comment(body) and not is_reply_to_comment(c, stage6_comment):
+                        logger.warning(f"[{self.issue_key}] ⚠️ Комментарий '{body.strip()}' (ID={cid}) проигнорирован: согласование должно быть оставлено как ответ (Reply) на карточку Gate 2 (ID={stage6_comment.get('id')}).")
 
         # 5. Завершение прогона в GitHub Actions (Этап 8)
         stage8_comment = next((c for c in sorted_comments if "[Этап 8 из 8]" in extract_comment_text(c.get("body", ""))), None)
         if self.state in (STATE_GATE2_APPROVED, STATE_CI_RUNNING):
             if stage8_comment or status_id == "10048":
                 self.state = STATE_COMPLETED
+                is_success = "УСПЕШНО" in extract_comment_text(stage8_comment.get("body", "") if stage8_comment else "") or status_id == "10048"
+                store.record_event(correlation_id=self.issue_key, issue_key=self.issue_key, event_type="PIPELINE_COMPLETED", producer="qa_daemon", payload={"success": is_success})
+                store.update_pipeline_state(self.issue_key, stage_idx=6, stage_name="Completed")
                 if "completed" not in self.sent_notifications:
                     is_success = "УСПЕШНО" in extract_comment_text(stage8_comment.get("body", "") if stage8_comment else "") or status_id == "10048"
-                    notify_pipeline_completed(self.issue_key, success=is_success, summary="Все автотесты успешно выполнены в GitHub Actions, сформирован отчет Allure.")
+                    if not stage8_comment:
+                        # Fallback: n8n не прислал отчет, отправляем резервное уведомление из демона
+                        notify_pipeline_completed(self.issue_key, success=is_success, summary="Все автотесты успешно выполнены в GitHub Actions, сформирован отчет Allure.")
+                        logger.info(f"[{self.issue_key}] 🏁 Пайплайн завершен, отправлено резервное Telegram-уведомление.")
+                    else:
+                        logger.info(f"[{self.issue_key}] 🏁 Пайплайн завершен. Отчет Allure уже отправлен в Telegram через n8n (дубликат исключен).")
                     self.sent_notifications.add("completed")
-                    logger.info(f"[{self.issue_key}] 🏁 Пайплайн завершен, отправлено итоговое Telegram-уведомление.")
+                    resume_n8n_execution(self.issue_key)
                 if status_id != "10048":
                     stage8_id = stage8_comment.get("id") if stage8_comment else "status"
                     if transition_once(self.issue_key, "31", scope_key=f"stage8:{stage8_id}"):
@@ -602,8 +670,11 @@ def daemon_loop():
     if str(BASE_DIR / "scripts") not in sys.path:
         sys.path.insert(0, str(BASE_DIR / "scripts"))
         
+    heartbeat_path = BASE_DIR / "data" / ".daemon_heartbeat"
     while True:
         try:
+            heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+            heartbeat_path.write_text(str(time.time()), encoding="utf-8")
             issues = get_in_progress_issues()
             if issues is None:
                 time.sleep(10)

@@ -1,0 +1,151 @@
+{
+  "id": "aJGEIfvJMHa4rY9d",
+  "name": "Debug-Arrow-Http",
+  "description": null,
+  "active": true,
+  "activeVersionId": "beaa4744-df69-4402-b429-e16dfbe0b317",
+  "createdAt": "2026-10-09T07:20:01.241Z",
+  "updatedAt": "2026-10-09T07:20:01.241Z",
+  "isArchived": false,
+  "versionId": "beaa4744-df69-4402-b429-e16dfbe0b317",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "name": "Webhook",
+      "webhookId": "debug-arrow-http",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "debug-arrow-http",
+        "responseMode": "lastNode"
+      },
+      "id": "3e4341d3-58ef-43e9-866b-653715b1b3f3"
+    },
+    {
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        100
+      ],
+      "parameters": {
+        "jsCode": "\nconst qasePost = async (endpoint, data) => {\n  return await this.helpers.httpRequest({\n    method: \"POST\",\n    url: `https://api.qase.io/v1/${endpoint}`,\n    headers: {\n      Token: \"a1afdd5f4fde689caed49e78d3c8e998b4ad94946ddb9770c2ac4d7a4476aa23\",\n      \"Content-Type\": \"application/json\"\n    },\n    body: data,\n    json: true\n  });\n};\n\nconst childRes = await qasePost(\"suite/JS\", { title: \"JS-16: Arrow Test\", parent_id: 33 });\nreturn [{ json: { childRes } }];\n"
+      },
+      "id": "c52c22ae-004d-448b-aed0-6f78d743607c"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "aJGEIfvJMHa4rY9d",
+      "projectId": "iLLAfMZoycBmLUIT",
+      "project": {
+        "id": "iLLAfMZoycBmLUIT",
+        "name": "Roman Timoshenko <roman.timoshenko@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T07:46:02.729Z",
+        "updatedAt": "2026-10-07T07:53:00.911Z"
+      },
+      "createdAt": "2026-10-09T07:20:01.243Z",
+      "updatedAt": "2026-10-09T07:20:01.243Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "beaa4744-df69-4402-b429-e16dfbe0b317",
+    "workflowId": "aJGEIfvJMHa4rY9d",
+    "nodes": [
+      {
+        "name": "Webhook",
+        "webhookId": "debug-arrow-http",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          100,
+          100
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "debug-arrow-http",
+          "responseMode": "lastNode"
+        },
+        "id": "3e4341d3-58ef-43e9-866b-653715b1b3f3"
+      },
+      {
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          300,
+          100
+        ],
+        "parameters": {
+          "jsCode": "\nconst qasePost = async (endpoint, data) => {\n  return await this.helpers.httpRequest({\n    method: \"POST\",\n    url: `https://api.qase.io/v1/${endpoint}`,\n    headers: {\n      Token: \"a1afdd5f4fde689caed49e78d3c8e998b4ad94946ddb9770c2ac4d7a4476aa23\",\n      \"Content-Type\": \"application/json\"\n    },\n    body: data,\n    json: true\n  });\n};\n\nconst childRes = await qasePost(\"suite/JS\", { title: \"JS-16: Arrow Test\", parent_id: 33 });\nreturn [{ json: { childRes } }];\n"
+        },
+        "id": "c52c22ae-004d-448b-aed0-6f78d743607c"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Roman Timoshenko",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-09T07:20:01.245Z",
+    "updatedAt": "2026-10-09T07:20:01.245Z",
+    "workflowPublishHistory": [
+      {
+        "id": 139,
+        "workflowId": "aJGEIfvJMHa4rY9d",
+        "versionId": "beaa4744-df69-4402-b429-e16dfbe0b317",
+        "event": "activated",
+        "userId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-09T07:20:01.467Z"
+      }
+    ]
+  }
+}

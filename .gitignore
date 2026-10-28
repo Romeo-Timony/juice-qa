@@ -28,3 +28,11 @@ data/*.db
 scratch/
 scratch_*.py
 github_logs.txt
+wiremock/*.jar
+wiremock/*.log
+
+# Runtime Daemon & Scratch Artifacts
+data/.daemon_heartbeat
+stage7_8_comment.txt
+scratch_cases_code.js
+extract_node.py

@@ -1,0 +1,72 @@
+{
+  "mappings": [
+    {
+      "name": "Jira Cloud - Get Issue Details",
+      "request": {
+        "method": "GET",
+        "urlPathPattern": "/rest/api/3/issue/[A-Z0-9-]+"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "id": "10048",
+          "key": "JS-40",
+          "fields": {
+            "summary": "[API] Автоматизация REST API регистрации и авторизации",
+            "status": {
+              "name": "Ready for QA",
+              "id": "10001"
+            },
+            "issuetype": {
+              "name": "Story"
+            },
+            "description": "Автоматизировать API регистрации и авторизации",
+            "comment": {
+              "comments": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Jira Cloud - Add Comment",
+      "request": {
+        "method": "POST",
+        "urlPathPattern": "/rest/api/3/issue/[A-Z0-9-]+/comment"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "id": "99001",
+          "body": "Comment posted"
+        }
+      }
+    },
+    {
+      "name": "Telegram Bot - Send Message",
+      "request": {
+        "method": "POST",
+        "urlPathPattern": "/bot.*/sendMessage"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "ok": true,
+          "result": {
+            "message_id": 8801,
+            "text": "Sent"
+          }
+        }
+      }
+    }
+  ]
+}

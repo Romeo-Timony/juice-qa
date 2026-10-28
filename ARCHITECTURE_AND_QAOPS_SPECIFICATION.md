@@ -337,6 +337,12 @@ sequenceDiagram
   * Автоматический учет серверного заголовка `Retry-After`.
   * Автоматический перевод сервисов (Jira, Qase, Gemini) в состояние `OPEN` в Circuit Breaker при превышении порога ошибок (`breaker_threshold = 5`).
   * Сброс всех неотправленных мутаций в очередь `qaops_outbox` для гарантированной доставки после восстановления доступности внешних API.
+* **Изолированное тестирование и Fault Injection через WireMock ([`wiremock/`](file:///d:/Desktop/Juice_shop/qa-automation/wiremock/)):**
+  * Standalone HTTP Mock Server (WireMock 3.9.2) для герметичного выполнения тестов без обращения к внешней сети.
+  * Набор предопределенных маппингов (`mappings/juiceshop_api.json`, `mappings/jira_and_telegram.json`).
+  * Симуляция сетевых сбоев, таймаутов, кодов 429 (Rate Limit) и 503 (Service Unavailable) с заголовками `Retry-After` для верификации работы Circuit Breaker и Outbox Replay.
+* **OpenAPI 3.0 / Swagger Contract Drift Protection ([`qaops/openapi_validator.py`](file:///d:/Desktop/Juice_shop/qa-automation/qaops/openapi_validator.py)):**
+  * Динамический парсинг спецификации Swagger UI (`/api-docs/swagger-ui-init.js`) и валидация моделей Pydantic v2 против контрактов бэкенда.
 
 #### 5. Слой Human-in-the-Loop ([`qaops/evidence.py`](file:///d:/Desktop/Juice_shop/qa-automation/qaops/evidence.py))
 * Формирует структурированный отчет для Senior AQA:

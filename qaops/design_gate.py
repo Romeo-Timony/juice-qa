@@ -121,14 +121,20 @@ def run_design_gate(issue_key: str, cases: List[Dict[str, Any]], acceptance_crit
 
         if use_llm and cases:
             ac = acceptance_criteria if acceptance_criteria is not None else fetch_acceptance_criteria(issue_key)
+            from concurrent.futures import ThreadPoolExecutor
             from qaops.judge import judge_coverage, judge_groundedness
-            for r in reviews:
+
+            def _eval_review(r):
                 if r.automation == "missing":
-                    continue
+                    return
                 verdict = judge_groundedness(case_as_text(by_id[r.id]), ac)
                 r.groundedness, r.grounded = verdict.score, verdict.passed
                 if not verdict.passed:
                     r.reasons.append(f"Groundedness {verdict.score:.2f} < {settings.groundedness_min}: {verdict.reason[:200]}")
+
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                list(executor.map(_eval_review, reviews))
+
             coverage = judge_coverage("\n\n".join(case_as_text(c) for c in cases), ac).to_dict()
         else:
             coverage = None

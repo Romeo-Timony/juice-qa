@@ -18,6 +18,7 @@ load_dotenv(BASE_DIR / ".env")
 
 from qaops.observability import current_trace, span, trace  # noqa: E402
 from qaops.resilience import TransientFailure, resilient_request  # noqa: E402
+from prompts.registry import get_prompt  # noqa: E402
 
 GEMINI_API_KEY = os.getenv("N8N_ASSISTANT_KEY") or os.getenv("GEMINI_API_KEY")
 REVIEW_DIR = BASE_DIR / "tests" / "review"
@@ -214,29 +215,10 @@ class IndependentAiAuditor:
             content = path.read_text(encoding="utf-8")
             code_snippets.append(f"### File: {f['file']}\n```python\n{content}\n```")
 
-        prompt = f"""
-Ты — независимый ведущий QA Архитектор и Security Auditor. Твоя задача — провести строгое код-ревью сгенерированных автотестов перед их переносом в основной репозиторий.
-
-Критерии оценки:
-1. Архитектура и читаемость (использование классов, стандарты PEP8, чистота).
-2. Allure Reporting & BDD (наличие шагов allure.step, описаний Gherkin, маркеров @pytest.mark.qase).
-3. Надежность и анти-flaky (отсутствие неявных таймаутов, надежность селекторов Playwright).
-4. Валидация контрактов (Pydantic схемы для API, проверка полей ответа).
-5. Изоляция тестов (генерация уникальных данных, отсутствие жесткой связности).
-
-Код автотестов на ревью:
-{chr(10).join(code_snippets)}
-
-Верни ответ СТРОГО в формате JSON со следующими полями:
-{{
-  "verdict": "ACCEPT" | "NEEDS_REVISION" | "REJECT",
-  "score": число от 1 до 100,
-  "summary": "Краткое заключение на русском языке",
-  "strengths": ["список сильных сторон"],
-  "risks_and_flakiness": ["список потенциальных рисков или замечаний"],
-  "recommendations": ["список рекомендаций"]
-}}
-"""
+        prompt = get_prompt(
+            "code_review_audit",
+            code_snippets="\n".join(code_snippets),
+        )
         return self._call_gemini(prompt)
 
     def audit_manual_cases(self, qase_cases: List[Dict[str, Any]], issue_key: str = "JS-16") -> Dict[str, Any]:
@@ -253,29 +235,12 @@ class IndependentAiAuditor:
                 "steps_count": len(c.get("steps", []))
             })
 
-        prompt = f"""
-Ты — независимый ведущий QA Lead и эксперт по тест-дизайну (ISTQB Certified).
-Твоя задача — провести критическую валидацию ручных тест-кейсов задачи {issue_key} в Qase TMS ПЕРЕД тем, как они пойдут в разработку автотестов (Human-in-the-Loop Gate 1).
-
-Критерии проверки:
-1. Полнота покрытия (Happy path, негативные сценарии, граничные значения BVA).
-2. Однозначность и точность шагов тест-кейсов.
-3. Корректность распределения пирамиды тестирования (API против UI).
-4. Отсутствие избыточности и дублирования проверок.
-
-Список тест-кейсов на проверку:
-{json.dumps(summary_cases, indent=2, ensure_ascii=False)}
-
-Верни ответ СТРОГО в формате JSON:
-{{
-  "verdict": "ACCEPT" | "NEEDS_REVISION" | "REJECT",
-  "score": число от 1 до 100,
-  "summary": "Краткое заключение о качестве тест-дизайна",
-  "strengths": ["список сильных сторон"],
-  "gaps_and_missing_checks": ["пропущенные проверки или граничные значения"],
-  "recommendations": ["рекомендации для QA команды"]
-}}
-"""
+        prompt = get_prompt(
+            "test_design_audit",
+            issue_key=issue_key,
+            acceptance_criteria="",
+            test_cases_json=json.dumps(summary_cases, indent=2, ensure_ascii=False),
+        )
         return self._call_gemini(prompt)
 
 

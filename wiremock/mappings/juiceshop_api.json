@@ -1,0 +1,96 @@
+{
+  "mappings": [
+    {
+      "name": "Juice Shop - User Login",
+      "request": {
+        "method": "POST",
+        "urlPath": "/rest/user/login"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "authentication": {
+            "token": "wiremock-mock-jwt-token-sdet-633",
+            "bid": 2,
+            "umail": "admin@juice-sh.op"
+          }
+        }
+      }
+    },
+    {
+      "name": "Juice Shop - User Registration",
+      "request": {
+        "method": "POST",
+        "urlPath": "/api/Users/"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "success",
+          "data": {
+            "id": 999,
+            "email": "new_shopper@juice-sh.op",
+            "role": "customer",
+            "isActive": true
+          }
+        }
+      }
+    },
+    {
+      "name": "Juice Shop - Security Answers",
+      "request": {
+        "method": "POST",
+        "urlPath": "/api/SecurityAnswers/"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "success",
+          "data": {
+            "id": 55,
+            "UserId": 999
+          }
+        }
+      }
+    },
+    {
+      "name": "Juice Shop - Product Catalog",
+      "request": {
+        "method": "GET",
+        "urlPath": "/api/Products"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "success",
+          "data": [
+            {
+              "id": 1,
+              "name": "Apple Juice (1000ml)",
+              "price": 1.99,
+              "deluxePrice": 0.99
+            },
+            {
+              "id": 2,
+              "name": "Orange Juice (1000ml)",
+              "price": 2.99,
+              "deluxePrice": 1.99
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

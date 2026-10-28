@@ -19,8 +19,11 @@ class RegisterPage(BasePage):
 
     @allure.step("Выбрать секретный вопрос с индексом {index}")
     def select_security_question(self, index: int = 0):
+        self.dismiss_banners()
+        self.security_question_select.focus()
+        self.page.wait_for_timeout(200)
         self.security_question_select.click(force=True)
-        self.page.wait_for_selector("mat-option", state="visible", timeout=3000)
+        self.page.wait_for_selector("mat-option", timeout=5000)
         self.page.locator("mat-option").nth(index).click()
 
     @allure.step("Заполнить форму регистрации пользователя ({email}) и подтвердить")

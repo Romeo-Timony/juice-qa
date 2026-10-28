@@ -1,0 +1,152 @@
+{
+  "id": "9TvDhLog5HyInpMz",
+  "name": "test-code-fetch",
+  "description": null,
+  "active": true,
+  "activeVersionId": "7ba124aa-c704-4894-b81b-246e90a6747a",
+  "createdAt": "2026-10-07T14:59:31.010Z",
+  "updatedAt": "2026-10-08T16:09:57.182Z",
+  "isArchived": false,
+  "versionId": "7ba124aa-c704-4894-b81b-246e90a6747a",
+  "versionCounter": 2,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-code-fetch-path",
+        "responseMode": "lastNode"
+      },
+      "id": "cbc75631-4c19-483a-9b5b-b3040e39ed9f",
+      "webhookId": "9a56620f-03ee-4372-9b35-9e8d90b90c62"
+    },
+    {
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n    const res = await fetch(\"https://api.qase.io/v1/suite/JS\", {\n      headers: { Token: \"a1afdd5f4fde689caed49e78d3c8e998b4ad94946ddb9770c2ac4d7a4476aa23\" }\n    });\n    const data = await res.json();\n    return [{ json: { total: data.result?.total } }];\n  "
+      },
+      "id": "5f0bf920-b413-49b7-9472-abc44eb4a15b"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "9TvDhLog5HyInpMz",
+      "projectId": "iLLAfMZoycBmLUIT",
+      "project": {
+        "id": "iLLAfMZoycBmLUIT",
+        "name": "Roman Timoshenko <roman.timoshenko@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T07:46:02.729Z",
+        "updatedAt": "2026-10-07T07:53:00.911Z"
+      },
+      "createdAt": "2026-10-07T14:59:31.015Z",
+      "updatedAt": "2026-10-07T14:59:31.015Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "7ba124aa-c704-4894-b81b-246e90a6747a",
+    "workflowId": "9TvDhLog5HyInpMz",
+    "nodes": [
+      {
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "test-code-fetch-path",
+          "responseMode": "lastNode"
+        },
+        "id": "cbc75631-4c19-483a-9b5b-b3040e39ed9f",
+        "webhookId": "9a56620f-03ee-4372-9b35-9e8d90b90c62"
+      },
+      {
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          200,
+          0
+        ],
+        "parameters": {
+          "jsCode": "\n    const res = await fetch(\"https://api.qase.io/v1/suite/JS\", {\n      headers: { Token: \"a1afdd5f4fde689caed49e78d3c8e998b4ad94946ddb9770c2ac4d7a4476aa23\" }\n    });\n    const data = await res.json();\n    return [{ json: { total: data.result?.total } }];\n  "
+        },
+        "id": "5f0bf920-b413-49b7-9472-abc44eb4a15b"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Roman Timoshenko",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-07T14:59:31.017Z",
+    "updatedAt": "2026-10-07T14:59:31.017Z",
+    "workflowPublishHistory": [
+      {
+        "id": 44,
+        "workflowId": "9TvDhLog5HyInpMz",
+        "versionId": "7ba124aa-c704-4894-b81b-246e90a6747a",
+        "event": "activated",
+        "userId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T14:59:31.177Z"
+      }
+    ]
+  }
+}

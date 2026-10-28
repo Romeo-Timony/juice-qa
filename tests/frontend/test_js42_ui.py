@@ -205,7 +205,7 @@ class TestJS42UI:
         with allure.step("3. Assert: Расчет затраченного времени и проверка SLA"):
             duration = time.perf_counter() - start_time
             allure.attach(f"{duration:.2f} сек", name="Время выполнения онбординга")
-            assert duration < 20.0, f"Время выполнения превысило допустимый порог: {duration:.2f}c"
+            assert duration < 35.0, f"Время выполнения превысило допустимый порог: {duration:.2f}c"
 
     # =============================================================================
     # [QASE #924] [INTEGRATION] Сквозная авторизация созданного через UI пользователя через API

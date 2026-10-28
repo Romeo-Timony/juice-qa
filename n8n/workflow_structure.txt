@@ -1,0 +1,111 @@
+Total nodes: 61, Sticky: 9, Functional: 52
+
+--- STICKY NOTES ---
+Sticky 'Стикер: Приём задач' at [-352, -48] [w=430, h=700]:
+## 📥 1. Приём задач и событий
+
+**Что здесь происходит:**
+Входящие вебхуки из Jira (обновление статуса тикета, комментарии) и Qase TMS (синхронизация тестов drift). Мгновенный перехват событий разработки.
+----------------------------------------
+Sticky 'Стикер: Проверка готовности (DoR)' at [144, 112] [w=1820, h=380]:
+## 📋 2. Проверка готовности задачи (DoR Gate) [Этап 1]
+
+**Что здесь происходит:**
+Загрузка тикета и Confluence-спецификации. Анализ качества критериев приемки (AC), валидация по чек-листу Definition of Ready и решение: пропустить или вернуть на доработку.
+----------------------------------------
+Sticky 'Стикер: Возврат задачи' at [672, 656] [w=1152, h=520]:
+## ❌ 3. Возврат задачи при DoR Fail & Telegram Alert
+
+**Что здесь происходит:**
+Если требования неполные или контракты не согласованы — задача переводится в «qa-paused» либо возвращается в «К выполнению» с подробными замечаниями в Jira и алертом в Telegram.
+----------------------------------------
+Sticky 'Стикер: Интеллект-карта проверок' at [2048, -32] [w=872, h=320]:
+## 🧠 4. Интеллект-карта проверок [Этап 2]
+
+**Что здесь происходит:**
+Формирование ментальной карты тест-дизайна (MindMap) по контрактам и пользовательским сценариям. Публикация Отчета 2 в Jira со структурой проверок.
+----------------------------------------
+Sticky 'Стикер: Тест-кейсы и RTM' at [2352, 544] [w=1580, h=520]:
+## 🧪 5. Синхронизация с Qase TMS & Матрица RTM [Этапы 3 и 4]
+
+**Что здесь происходит:**
+Генерация BDD-тест-кейсов, дедупликация относительно существующей базы Qase TMS, сохранение новых тестов и публикация матрицы прослеживаемости требований (RTM) в Jira.
+----------------------------------------
+Sticky 'Стикер: Контроль 1' at [3872, 64] [w=680, h=340]:
+## 🛡️ 6. Контроль 1 (Gate 1 Review) & Оповещение
+
+**Что здесь происходит:**
+Публикация интерактивной карточки согласования тестов в Jira (Gate 1). Отправка сводного уведомления в Telegram-канал команды QA.
+----------------------------------------
+Sticky 'Стикер: GitHub Actions Результаты' at [5664, 64] [w=950, h=340]:
+## 📊 8. Результаты прогона в CI/CD (Allure Report) [Этап 8]
+
+**Что здесь происходит:**
+Прием вебхука с результатами от GitHub Actions runner, парсинг метрик Allure, публикация финального отчета в тикете Jira и закрытие задачи с итоговым отчетом в Telegram.
+----------------------------------------
+Sticky 'Стикер: GitHub Actions Trigger' at [5264, 64] [w=380, h=340]:
+## 🐙 7. GitHub Actions: Запуск CI/CD
+
+**Что здесь происходит:**
+Нативный вызов GitHub API (workflow_dispatch) репозитория Romeo-Timony/juice-qa для запуска прогона автотестов. Оповещение команды в Telegram о старте пайплайна.
+----------------------------------------
+Sticky 'Стикер: Gate 2 и Внедрение' at [4352, 64] [w=950, h=340]:
+## 🛡️ 7. Контроль 2 (Gate 2 Review) & Внедрение [Этапы 6 и 7]
+
+**Что здесь происходит:**
+Публикация карточки проверки качества кода автотестов (Gate 2) в Jira, оповещение QA Lead в Telegram, подтверждение и выпуск Отчета №7 о внедрении автотестов в боевой репозиторий.
+----------------------------------------
+
+--- FUNCTIONAL NODES ---
+[3696, 64] Анализ рассинхрона Qase (Drift Detector) (n8n-nodes-base.code)
+[-96, 288] Jira: Перехват обновления задачи (n8n-nodes-base.webhook)
+[-96, 480] Execute Workflow Trigger (n8n-nodes-base.executeWorkflowTrigger)
+[240, 272] Фильтр: Задача взята в работу (n8n-nodes-base.code)
+[464, 272] Jira: Загрузить данные задачи (n8n-nodes-base.httpRequest)
+[688, 272] Jira: Загрузить ссылки задачи (n8n-nodes-base.httpRequest)
+[912, 272] Правила проверки готовности задачи (n8n-nodes-base.code)
+[1120, 272] Подготовка задачи к проверке (n8n-nodes-base.code)
+[1344, 272] Проверка задачи на готовность (n8n-nodes-base.code)
+[1568, 272] Условие: Требования задачи понятны? (n8n-nodes-base.if)
+[752, 880] Jira: Отправить замечания к задаче (n8n-nodes-base.httpRequest)
+[976, 880] Условие: Пауза из-за контракта или возврат? (n8n-nodes-base.if)
+[1184, 784] Jira: Поставить метку qa-paused (n8n-nodes-base.httpRequest)
+[1184, 976] Jira: Вернуть задачу на доработку (n8n-nodes-base.httpRequest)
+[1408, 976] Jira: Поставить метку Требует доработки (n8n-nodes-base.httpRequest)
+[1808, 272] Jira: Отчет 1 — Задача готова к работе (DoR Gate) (n8n-nodes-base.httpRequest)
+[2096, 64] Подготовка данных для чек-листа (n8n-nodes-base.code)
+[2304, 64] Создание карты проверок (n8n-nodes-base.code)
+[2720, 64] Jira: Отчет 2 — Интеллект-карта проверок (n8n-nodes-base.httpRequest)
+[2128, 816] Подготовка данных для тест-кейсов (n8n-nodes-base.code)
+[2352, 816] Qase: Загрузить список папок (n8n-nodes-base.httpRequest)
+[2560, 816] Qase: Загрузить существующие тесты (n8n-nodes-base.httpRequest)
+[2736, 816] Создание тест-кейсов без повторов (n8n-nodes-base.code)
+[3008, 816] Jira: Отчет 3 — Реестр тест-кейсов (BDD) (n8n-nodes-base.httpRequest)
+[3232, 816] Jira: Отчет 4 — Матрица трассируемости (RTM) (n8n-nodes-base.httpRequest)
+[2992, 64] Условие: Есть новые тесты для добавления? (n8n-nodes-base.if)
+[3216, 64] Qase: Создать новые тесты в базе (n8n-nodes-base.httpRequest)
+[3440, 64] Jira: Прикрепить ссылку на тесты в Qase (n8n-nodes-base.httpRequest)
+[3952, 64] Контроль 1: Подтверждение тест-кейсов (n8n-nodes-base.code)
+[4192, 64] Jira: Карточка подтверждения тестов (Gate 1) (n8n-nodes-base.httpRequest)
+[5536, 672] Webhook: Прием отчетов GitHub Actions (n8n-nodes-base.webhook)
+[5952, 192] Парсинг отчета Allure (n8n-nodes-base.set)
+[6160, 192] Jira: Опубликовать отчет Allure (n8n-nodes-base.httpRequest)
+[4400, 192] Telegram: Оповещение об успешном DoR (n8n-nodes-base.telegram)
+[1632, 880] Telegram: Алерт об отклонении DoR (n8n-nodes-base.telegram)
+[6384, 192] Telegram: Отчет Allure из CI/CD (n8n-nodes-base.telegram)
+[5280, 192] GitHub: Запуск автотестов в CI/CD (n8n-nodes-base.github)
+[5504, 192] Telegram: Оповещение о старте CI/CD (n8n-nodes-base.telegram)
+[1280, 64] LLM Judge: Оценка готовности (DoR Gate) (@n8n/n8n-nodes-langchain.chainLlm)
+[1344, 464] Gemini Model: DoR Judge (@n8n/n8n-nodes-langchain.lmChatGoogleGemini)
+[2880, 816] LLM Judge: Аудит тест-дизайна (Design Gate) (@n8n/n8n-nodes-langchain.chainLlm)
+[2816, 1200] Gemini Model: Design Gate Judge (@n8n/n8n-nodes-langchain.lmChatGoogleGemini)
+[2496, 64] Whimsical: Генерация MindMap (n8n-nodes-base.code)
+[848, -256] Telegram: Алерт о рассинхронизации Qase (Drift) (n8n-nodes-base.telegram)
+[1808, 480] Langfuse: Фиксация трейса и метрик (n8n-nodes-base.httpRequest)
+[5728, 192] Ожидание завершения CI/CD и отчета Allure (n8n-nodes-base.wait)
+[1088, -224] Jira: Регистрация дрифта в задаче (n8n-nodes-base.httpRequest)
+[4512, 512] Jira: Карточка проверки кода (Gate 2) (n8n-nodes-base.httpRequest)
+[4672, 272] Telegram: Запрос согласования кода (Gate 2) (n8n-nodes-base.telegram)
+[4880, 192] Ожидание согласования кода (Gate 2 Wait) (n8n-nodes-base.wait)
+[5136, 192] Jira: Отчет 7 — Внедрение автотестов в проект (n8n-nodes-base.httpRequest)
+[3600, 64] Ожидание согласования тест-дизайна (Gate 1 Wait) (n8n-nodes-base.wait)

@@ -1,0 +1,171 @@
+{
+  "id": "GpaQoEadYeZe6TMd",
+  "name": "Test TG Expression Execution",
+  "description": null,
+  "active": true,
+  "activeVersionId": "2e010629-f7d7-4d40-9303-5cee67148809",
+  "createdAt": "2026-10-22T07:11:04.387Z",
+  "updatedAt": "2026-10-22T07:11:04.387Z",
+  "isArchived": false,
+  "versionId": "2e010629-f7d7-4d40-9303-5cee67148809",
+  "versionCounter": 1,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "id": "wh1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-tg-expr"
+      },
+      "webhookId": "f6484ac3-dc66-49f0-8dcb-8a922ac1495e"
+    },
+    {
+      "id": "tg1",
+      "name": "Telegram Test",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        100
+      ],
+      "parameters": {
+        "chatId": "1434200911",
+        "text": "=✅ <b>[QA DoR Gate: Задача одобрена]</b>\n\n📌 <b>Задача:</b> {{ $json.body.issueKey || \"JS-39\" }} — {{ $json.body.summary || \"Регистрация\" }}\n🎯 <b>Оценка DoR:</b> 100%\n\n🔗 <a href=\"https://romeo-timony.atlassian.net/browse/{{ $json.body.issueKey || \"JS-39\" }}\">Открыть задачу в Jira</a>",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "dUppB4c1jJrLuGqq",
+          "name": "QA Telegram Bot"
+        }
+      },
+      "webhookId": "419b0f09-b35b-4fc2-b30b-090e92ae43d5"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Telegram Test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "GpaQoEadYeZe6TMd",
+      "projectId": "iLLAfMZoycBmLUIT",
+      "project": {
+        "id": "iLLAfMZoycBmLUIT",
+        "name": "Roman Timoshenko <roman.timoshenko@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-07T07:46:02.729Z",
+        "updatedAt": "2026-10-07T07:53:00.911Z"
+      },
+      "createdAt": "2026-10-22T07:11:04.390Z",
+      "updatedAt": "2026-10-22T07:11:04.390Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "2e010629-f7d7-4d40-9303-5cee67148809",
+    "workflowId": "GpaQoEadYeZe6TMd",
+    "nodes": [
+      {
+        "id": "wh1",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          100,
+          100
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "test-tg-expr"
+        },
+        "webhookId": "f6484ac3-dc66-49f0-8dcb-8a922ac1495e"
+      },
+      {
+        "id": "tg1",
+        "name": "Telegram Test",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          300,
+          100
+        ],
+        "parameters": {
+          "chatId": "1434200911",
+          "text": "=✅ <b>[QA DoR Gate: Задача одобрена]</b>\n\n📌 <b>Задача:</b> {{ $json.body.issueKey || \"JS-39\" }} — {{ $json.body.summary || \"Регистрация\" }}\n🎯 <b>Оценка DoR:</b> 100%\n\n🔗 <a href=\"https://romeo-timony.atlassian.net/browse/{{ $json.body.issueKey || \"JS-39\" }}\">Открыть задачу в Jira</a>",
+          "additionalFields": {
+            "parse_mode": "HTML"
+          }
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "dUppB4c1jJrLuGqq",
+            "name": "QA Telegram Bot"
+          }
+        },
+        "webhookId": "419b0f09-b35b-4fc2-b30b-090e92ae43d5"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Telegram Test",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Roman Timoshenko",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-22T07:11:04.392Z",
+    "updatedAt": "2026-10-22T07:11:04.392Z",
+    "workflowPublishHistory": [
+      {
+        "id": 228,
+        "workflowId": "GpaQoEadYeZe6TMd",
+        "versionId": "2e010629-f7d7-4d40-9303-5cee67148809",
+        "event": "activated",
+        "userId": "25817456-0b38-469c-8b95-22ec7e78826e",
+        "createdAt": "2026-10-22T07:11:04.656Z"
+      }
+    ]
+  }
+}

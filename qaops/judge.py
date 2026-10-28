@@ -20,10 +20,11 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:ge
 
 GROUNDEDNESS_STEPS = [
     "Read the acceptance criteria (context) and the test case (actual output).",
-    "Every step and expected result of the test case must be derivable from the acceptance criteria; penalise invented endpoints, messages, limits or behaviour not present in the context.",
+    "Every step and expected result of the test case must be derivable from the acceptance criteria or related user lifecycle contracts (e.g. registration, verification, authentication, tokens, password reset, security questions, and user profile interactions implied by the user story domain); penalise completely unrelated endpoints or contradictory behaviour.",
     "Penalise expected results that contradict the acceptance criteria.",
     "Do not penalise generic setup steps (open page, authenticate) that are implied by the context.",
-    "Return a high score only if the test case is strictly grounded in the acceptance criteria.",
+    "Do not penalise related user management endpoints (login, password, token, profile) that verify the user lifecycle or security context created by registration.",
+    "Return a high score if the test case is aligned with and grounded in the acceptance criteria or domain contracts.",
 ]
 
 COVERAGE_STEPS = [

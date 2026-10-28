@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-10-27T09:25:48.086622+00:00",
+  "issue_key": "JS-42",
+  "verdict": "NEEDS_REVISION",
+  "score": 88,
+  "files": [
+    "C:\\Yandex.Disk\\Рабочий стол\\Juice_shop\\qa-automation\\tests\\review\\frontend\\test_js42_ui.py"
+  ],
+  "approved": true,
+  "approved_by": "QA Lead",
+  "approved_at": "2026-10-27 09:27:15 UTC"
+}

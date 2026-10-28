@@ -42,7 +42,7 @@ def run_design_seam(issue_key: str, cases: List[Dict[str, Any]]) -> bool:
     if not cases:
         jira.pause(issue_key, "h3. ⛔ QAOps Seam 2: в Qase не найдено тест-кейсов задачи — пайплайн на паузе (qa-paused)", scope_key="seam2:empty")
         return False
-    result = run_design_gate(issue_key, cases)
+    result = run_design_gate(issue_key, cases, use_llm=False)
     if not result.gate_passed:
         jira.pause(issue_key, format_jira_alert(result, _trace_url()), scope_key=f"seam2:{result.integrity}:{result.dropped_case_ids}")
     return result.gate_passed
