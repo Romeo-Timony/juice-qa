@@ -24,7 +24,6 @@
 | Документ | Аудитория и назначение | Основное содержание |
 | :--- | :--- | :--- |
 | 📖 **[COMPREHENSIVE_PROJECT_OVERVIEW_RU.md](./docs/COMPREHENSIVE_PROJECT_OVERVIEW_RU.md)** | **Главный русскоязычный обзор проекта (Whitepaper)** | Исчерпывающее руководство по платформе с разбором архитектуры, 8 этапов, TDM, дедупликации и шпаргалкой из 15 каверзных вопросов для собеседований. |
-| 🎓 **[PROJECT_MASTER_REVIEW.md](./docs/PROJECT_MASTER_REVIEW.md)** | **Системный справочник для интервью и AI-копилотов** | Англоязычный эталонный технический документ: ADR (DEC-001...015), DeepEval vs AST, Langfuse телеметрия, RQI-метрики. |
 | 🏛️ **[ARCHITECTURE_AND_QAOPS_SPECIFICATION.md](./ARCHITECTURE_AND_QAOPS_SPECIFICATION.md)** | **Архитекторы и QAOps-инженеры** | Глубокая спецификация 6 архитектурных швов (Seams 1–6), схема отказоустойчивости, Circuit Breaker, AST-шлюзы. |
 | 📑 **[DECISION_LOG_AND_NOTES.md](./DECISION_LOG_AND_NOTES.md)** | **Инженерная команда** | Полный журнал архитектурных решений (ADR DEC-001 — DEC-015) с техническим обоснованием каждого выбора. |
 | 💼 **[QA_ENGINEER_RESUME_AND_PROJECT_DOSSIER.md](./QA_ENGINEER_RESUME_AND_PROJECT_DOSSIER.md)** | **Рекрутеры и HR-специалисты** | Готовое резюме-досье (Project Case Study) с формулировками ключевых достижений, метрик и навыков инженера. |
