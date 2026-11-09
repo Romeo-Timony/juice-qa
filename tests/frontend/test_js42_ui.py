@@ -1,4 +1,4 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-27 09:27:15 UTC | AI Audit: NEEDS_REVISION (88/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-11-09 07:25:07 UTC | AI Audit: NEEDS_REVISION (82/100)
 """
 E2E Automated Test Suite for JS-42
 Automates 6 scenarios marked as to-be-automated in Qase TMS.
@@ -21,15 +21,15 @@ class TestJS42UI:
     """Набор сквозных E2E тестов онбординга нового покупателя (JS-42)."""
 
     # =============================================================================
-    # [QASE #919] [SMOKE] Полный приемочный цикл онбординга нового покупателя
+    # [QASE #983] [SMOKE] Полный приемочный цикл онбординга нового покупателя
     # =============================================================================
     @allure.title("[E2E][Smoke] Полный приемочный цикл онбординга нового покупателя: регистрация, вход и переход к покупкам")
     @allure.issue("JS-42")
-    @allure.testcase("919")
-    @pytest.mark.qase(id=919)
+    @allure.testcase("983")
+    @pytest.mark.qase(id=983)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc919_full_onboarding_cycle(self, page: Page, base_url: str):
+    def test_tc983_full_onboarding_cycle(self, page: Page, base_url: str):
         """
         Arrange: Инициализация POM-страниц регистрации и логина, генерация учетных данных.
         Act: Сквозная регистрация пользователя и вход в систему.
@@ -56,15 +56,15 @@ class TestJS42UI:
             assert token is not None and len(token) > 20, "JWT токен должен быть сохранен в сессии"
 
     # =============================================================================
-    # [QASE #920] [INTEGRATION] Сквозная консистентность сессии и сохранение Bearer JWT
+    # [QASE #984] [INTEGRATION] Сквозная консистентность сессии и сохранение Bearer JWT
     # =============================================================================
     @allure.title("[E2E][Integration] Сквозная консистентность сессии и проверка сохранения Bearer JWT в Web Storage")
     @allure.issue("JS-42")
-    @allure.testcase("920")
-    @pytest.mark.qase(id=920)
+    @allure.testcase("984")
+    @pytest.mark.qase(id=984)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc920_session_consistency_jwt_storage(self, page: Page, base_url: str):
+    def test_tc984_session_consistency_jwt_storage(self, page: Page, base_url: str):
         """
         Arrange: Регистрация нового аккаунта и авторизация.
         Act: Извлечение JWT токена из браузерного LocalStorage.
@@ -93,15 +93,15 @@ class TestJS42UI:
             assert password not in storage_dump, "Утечка пароля в открытом виде в localStorage!"
 
     # =============================================================================
-    # [QASE #921] [NEGATIVE] Сквозная обработка дубликата Email при регистрации
+    # [QASE #985] [NEGATIVE] Сквозная обработка дубликата Email при регистрации
     # =============================================================================
     @allure.title("[E2E][Negative] Сквозная обработка дубликата Email при регистрации (HTTP 400 и UI Notification)")
     @allure.issue("JS-42")
-    @allure.testcase("921")
-    @pytest.mark.qase(id=921)
+    @allure.testcase("985")
+    @pytest.mark.qase(id=985)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc921_duplicate_email_negative(self, page: Page, base_url: str):
+    def test_tc985_duplicate_email_negative(self, page: Page, base_url: str):
         """
         Arrange: Использование существующего в системе email администратора.
         Act: Попытка повторной регистрации через UI.
@@ -123,15 +123,15 @@ class TestJS42UI:
             expect(error_locator.first).to_contain_text(re.compile(r"Email must be unique|error", re.I))
 
     # =============================================================================
-    # [QASE #922] [SECURITY] Сквозной сброс и восстановление пароля по секретному вопросу
+    # [QASE #986] [SECURITY] Сквозной сброс и восстановление пароля по секретному вопросу
     # =============================================================================
     @allure.title("[E2E][Security] Сквозной сценарий сброса и восстановления пароля по секретному вопросу")
     @allure.issue("JS-42")
-    @allure.testcase("922")
-    @pytest.mark.qase(id=922)
+    @allure.testcase("986")
+    @pytest.mark.qase(id=986)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc922_security_password_recovery(self, page: Page, base_url: str):
+    def test_tc986_security_password_recovery(self, page: Page, base_url: str):
         """
         Arrange: Регистрация пользователя с секретным вопросом.
         Act: Сброс пароля на /#/forgot-password и авторизация с новым паролем.
@@ -173,15 +173,15 @@ class TestJS42UI:
             page.wait_for_url(re.compile(r".*/#/search.*"), timeout=15000)
 
     # =============================================================================
-    # [QASE #923] [NFR] Валидация SLA производительности полного цикла онбординга
+    # [QASE #987] [NFR] Валидация SLA производительности полного цикла онбординга
     # =============================================================================
     @allure.title("[E2E][NFR] Валидация SLA производительности полного цикла онбординга (< 3 секунд)")
     @allure.issue("JS-42")
-    @allure.testcase("923")
-    @pytest.mark.qase(id=923)
+    @allure.testcase("987")
+    @pytest.mark.qase(id=987)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc923_onboarding_performance_sla(self, page: Page, base_url: str):
+    def test_tc987_onboarding_performance_sla(self, page: Page, base_url: str):
         """
         Arrange: Подготовка уникальных учетных данных.
         Act: Замер времени выполнения онбординга (регистрация + логин).
@@ -205,18 +205,18 @@ class TestJS42UI:
         with allure.step("3. Assert: Расчет затраченного времени и проверка SLA"):
             duration = time.perf_counter() - start_time
             allure.attach(f"{duration:.2f} сек", name="Время выполнения онбординга")
-            assert duration < 35.0, f"Время выполнения превысило допустимый порог: {duration:.2f}c"
+            assert duration < 20.0, f"Время выполнения превысило допустимый порог: {duration:.2f}c"
 
     # =============================================================================
-    # [QASE #924] [INTEGRATION] Сквозная авторизация созданного через UI пользователя через API
+    # [QASE #988] [INTEGRATION] Сквозная авторизация созданного через UI пользователя через API
     # =============================================================================
     @allure.title("[E2E][Integration] Сквозная авторизация созданного через UI пользователя через прямой API POST /rest/user/login")
     @allure.issue("JS-42")
-    @allure.testcase("924")
-    @pytest.mark.qase(id=924)
+    @allure.testcase("988")
+    @pytest.mark.qase(id=988)
     @pytest.mark.e2e
     @pytest.mark.ui
-    def test_tc924_direct_api_login_consistency(self, page: Page, base_url: str):
+    def test_tc988_direct_api_login_consistency(self, page: Page, base_url: str):
         """
         Arrange: Регистрация нового покупателя через веб-интерфейс RegisterPage.
         Act: Прямой вызов REST API авторизации POST /rest/user/login с созданными учетными данными.
