@@ -1,4 +1,4 @@
-# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-10-27 08:59:39 UTC | AI Audit: ACCEPT (98/100)
+# [HITL PROMOTED] Approved by: QA Lead | Date: 2026-11-09 07:21:03 UTC | AI Audit: ACCEPT (96/100)
 """
 Frontend UI Automated Test Suite for JS-41
 Automates 12 scenarios marked as to-be-automated in Qase TMS.
@@ -19,14 +19,14 @@ class TestJS41UI:
     """Набор из 12 автоматизированных UI-тестов формы регистрации (POM & Playwright)."""
 
     # =============================================================================
-    # [QASE #895] [SMOKE] Успешная регистрация нового пользователя с валидными форматами Email
+    # [QASE #971] [SMOKE] Успешная регистрация нового пользователя с валидными форматами Email
     # =============================================================================
     @allure.title("[Frontend][Parametrized] Успешная регистрация нового пользователя с валидными форматами Email")
     @allure.issue("JS-41")
-    @allure.testcase("895")
-    @pytest.mark.qase(id=895)
+    @allure.testcase("971")
+    @pytest.mark.qase(id=971)
     @pytest.mark.ui
-    def test_tc895_registration_with_valid_email(self, page: Page, base_url: str):
+    def test_tc971_registration_with_valid_email(self, page: Page, base_url: str):
         """
         Arrange: Инициализация POM RegisterPage и генерация уникального email через UUID.
         Act: Заполнение всех обязательных полей и подтверждение регистрации.
@@ -47,14 +47,14 @@ class TestJS41UI:
             expect(page.locator("simple-snack-bar, .mat-snack-bar-container")).to_be_visible()
 
     # =============================================================================
-    # [QASE #896] [BVA] Проверка граничных значений длины пароля (5-40 символов)
+    # [QASE #972] [BVA] Проверка граничных значений длины пароля (5-40 символов)
     # =============================================================================
     @allure.title("[Frontend][Parametrized] Проверка граничных значений длины пароля при регистрации пользователя (BVA: 5-40 символов)")
     @allure.issue("JS-41")
-    @allure.testcase("896")
-    @pytest.mark.qase(id=896)
+    @allure.testcase("972")
+    @pytest.mark.qase(id=972)
     @pytest.mark.ui
-    def test_tc896_password_boundary_validation(self, page: Page, base_url: str):
+    def test_tc972_password_boundary_validation(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Ввод пароля нижней границы допустимого диапазона (5 символов).
@@ -75,14 +75,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_enabled()
 
     # =============================================================================
-    # [QASE #897] [NEGATIVE] Валидация ошибки при несовпадении пароля и подтверждения
+    # [QASE #973] [NEGATIVE] Валидация ошибки при несовпадении пароля и подтверждения
     # =============================================================================
     @allure.title("[Frontend] Валидация ошибки при несовпадении пароля и подтверждения пароля (\"Passwords do not match\")")
     @allure.issue("JS-41")
-    @allure.testcase("897")
-    @pytest.mark.qase(id=897)
+    @allure.testcase("973")
+    @pytest.mark.qase(id=973)
     @pytest.mark.ui
-    def test_tc897_password_mismatch_error(self, page: Page, base_url: str):
+    def test_tc973_password_mismatch_error(self, page: Page, base_url: str):
         """
         Arrange: Открытие страницы регистрации.
         Act: Ввод разных значений в поля Password и Repeat Password.
@@ -102,14 +102,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #898] [POSITIVE] Блокировка кнопки Register по умолчанию при пустой форме
+    # [QASE #974] [POSITIVE] Блокировка кнопки Register по умолчанию при пустой форме
     # =============================================================================
     @allure.title("[Frontend] Блокировка кнопки Register по умолчанию при пустой форме (#registerButton disabled)")
     @allure.issue("JS-41")
-    @allure.testcase("898")
-    @pytest.mark.qase(id=898)
+    @allure.testcase("974")
+    @pytest.mark.qase(id=974)
     @pytest.mark.ui
-    def test_tc898_default_register_button_disabled(self, page: Page, base_url: str):
+    def test_tc974_default_register_button_disabled(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Оставление полей пустыми в исходном состоянии.
@@ -126,14 +126,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #899] [NEGATIVE] Проверка ошибки при некорректном формате Email
+    # [QASE #975] [NEGATIVE] Проверка ошибки при некорректном формате Email
     # =============================================================================
     @allure.title("[Frontend] Проверка сообщения об ошибке при некорректном формате Email (\"Email is not valid\")")
     @allure.issue("JS-41")
-    @allure.testcase("899")
-    @pytest.mark.qase(id=899)
+    @allure.testcase("975")
+    @pytest.mark.qase(id=975)
     @pytest.mark.ui
-    def test_tc899_invalid_email_format(self, page: Page, base_url: str):
+    def test_tc975_invalid_email_format(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Ввод строки без домена и символа @ в поле Email.
@@ -151,14 +151,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #900] [BVA] Блокировка кнопки Register при пароле короче 5 символов
+    # [QASE #976] [BVA] Блокировка кнопки Register при пароле короче 5 символов
     # =============================================================================
     @allure.title("[Frontend] Блокировка кнопки Register при пароле короче 5 символов (\"Password must be 5-40 characters long\")")
     @allure.issue("JS-41")
-    @allure.testcase("900")
-    @pytest.mark.qase(id=900)
+    @allure.testcase("976")
+    @pytest.mark.qase(id=976)
     @pytest.mark.ui
-    def test_tc900_password_too_short(self, page: Page, base_url: str):
+    def test_tc976_password_too_short(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Ввод пароля длиной 4 символа (ниже нижней границы BVA).
@@ -178,14 +178,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #901] [BVA] Блокировка кнопки Register при пароле длиннее 40 символов
+    # [QASE #977] [BVA] Блокировка кнопки Register при пароле длиннее 40 символов
     # =============================================================================
     @allure.title("[Frontend] Блокировка кнопки Register при пароле длиннее 40 символов (BVA: 41 символ)")
     @allure.issue("JS-41")
-    @allure.testcase("901")
-    @pytest.mark.qase(id=901)
+    @allure.testcase("977")
+    @pytest.mark.qase(id=977)
     @pytest.mark.ui
-    def test_tc901_password_too_long(self, page: Page, base_url: str):
+    def test_tc977_password_too_long(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Ввод пароля длиной 41 символ (выше верхней границы BVA).
@@ -206,14 +206,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #902] [FUNCTIONAL] Отображение индикатора надежности пароля при переключении тоггла
+    # [QASE #978] [FUNCTIONAL] Отображение индикатора надежности пароля при переключении тоггла
     # =============================================================================
     @allure.title("[Frontend] Отображение индикатора надежности пароля при включении тоггла \"Show password advice\"")
     @allure.issue("JS-41")
-    @allure.testcase("902")
-    @pytest.mark.qase(id=902)
+    @allure.testcase("978")
+    @pytest.mark.qase(id=978)
     @pytest.mark.ui
-    def test_tc902_password_advice_toggle(self, page: Page, base_url: str):
+    def test_tc978_password_advice_toggle(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Клик по тогглу показа подсказок надежности пароля.
@@ -232,14 +232,14 @@ class TestJS41UI:
             expect(page.locator("mat-slide-toggle").first).to_be_visible()
 
     # =============================================================================
-    # [QASE #903] [VALIDATION] Обязательность выбора контрольного вопроса из списка
+    # [QASE #979] [VALIDATION] Обязательность выбора контрольного вопроса из списка
     # =============================================================================
     @allure.title("[Frontend] Обязательность выбора контрольного вопроса из списка Security Questions (mat-select)")
     @allure.issue("JS-41")
-    @allure.testcase("903")
-    @pytest.mark.qase(id=903)
+    @allure.testcase("979")
+    @pytest.mark.qase(id=979)
     @pytest.mark.ui
-    def test_tc903_security_question_mandatory(self, page: Page, base_url: str):
+    def test_tc979_security_question_mandatory(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Заполнение всех полей формы кроме контрольного вопроса.
@@ -259,14 +259,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #904] [VALIDATION] Валидация обязательности ответа на секретный вопрос
+    # [QASE #980] [VALIDATION] Валидация обязательности ответа на секретный вопрос
     # =============================================================================
     @allure.title("[Frontend] Валидация обязательности ответа на секретный вопрос (#securityAnswerControl)")
     @allure.issue("JS-41")
-    @allure.testcase("904")
-    @pytest.mark.qase(id=904)
+    @allure.testcase("980")
+    @pytest.mark.qase(id=980)
     @pytest.mark.ui
-    def test_tc904_security_answer_mandatory(self, page: Page, base_url: str):
+    def test_tc980_security_answer_mandatory(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Выбор вопроса из выпадающего списка без указания ответа.
@@ -287,14 +287,14 @@ class TestJS41UI:
             expect(register_page.register_button).to_be_disabled()
 
     # =============================================================================
-    # [QASE #905] [SECURITY] Скрытие ввода пароля (type='password') в полях ввода
+    # [QASE #981] [SECURITY] Скрытие ввода пароля (type='password') в полях ввода
     # =============================================================================
     @allure.title("[Frontend] Скрытие ввода пароля (type='password') в полях Password и Repeat Password")
     @allure.issue("JS-41")
-    @allure.testcase("905")
-    @pytest.mark.qase(id=905)
+    @allure.testcase("981")
+    @pytest.mark.qase(id=981)
     @pytest.mark.ui
-    def test_tc905_password_masking_security(self, page: Page, base_url: str):
+    def test_tc981_password_masking_security(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Получение атрибутов элементов полей ввода пароля.
@@ -312,14 +312,14 @@ class TestJS41UI:
             expect(register_page.repeat_password_input).to_have_attribute("type", "password")
 
     # =============================================================================
-    # [QASE #906] [ACCESSIBILITY] Доступность формы по клавиатуре (Tab Navigation & WCAG 2.1 AA)
+    # [QASE #982] [ACCESSIBILITY] Доступность формы по клавиатуре (Tab Navigation & WCAG 2.1 AA)
     # =============================================================================
     @allure.title("[Frontend] Доступность формы регистрации по клавиатуре (Tab Navigation & WCAG 2.1 AA)")
     @allure.issue("JS-41")
-    @allure.testcase("906")
-    @pytest.mark.qase(id=906)
+    @allure.testcase("982")
+    @pytest.mark.qase(id=982)
     @pytest.mark.ui
-    def test_tc906_keyboard_tab_navigation(self, page: Page, base_url: str):
+    def test_tc982_keyboard_tab_navigation(self, page: Page, base_url: str):
         """
         Arrange: Открытие формы регистрации.
         Act: Установка фокуса на поле Email и нажатие клавиши Tab.
