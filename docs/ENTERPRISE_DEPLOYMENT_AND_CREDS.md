@@ -1,10 +1,10 @@
-# 🏢 Руководство по корпоративному развертыванию и настройке учетных данных (Enterprise Deployment Guide)
+# Руководство по корпоративному развертыванию и настройке учетных данных (Enterprise Deployment Guide)
 
-Данный документ описывает процесс переноса и запуска платформы **Autonomous QAOps & Self-Healing Testing Agent** на инфраструктуре любой компании или предприятия без привязки к конкретному аккаунту (Zero Vendor Lock-in).
+Данный документ описывает процесс переноса и запуска платформы Autonomous QAOps & Self-Healing Testing Agent на инфраструктуре любой компании или предприятия без привязки к конкретному аккаунту (Zero Vendor Lock-in).
 
 ---
 
-## 🏗️ 1. Архитектурные компоненты платформы
+## 1. Архитектурные компоненты платформы
 
 Платформа состоит из 4 ключевых слабосвязанных слоев:
 
@@ -37,7 +37,7 @@
 
 ---
 
-## 📋 2. Пошаговая инициализация для нового предприятия
+## 2. Пошаговая инициализация для нового предприятия
 
 ### Шаг 1: Клонирование и виртуальное окружение
 ```bash
@@ -54,16 +54,16 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 Заполните обязательные переменные:
-1. **Jira Cloud:** `ATLASSIAN_BASE_URL`, `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`, `JIRA_PROJECT_KEY`.
-2. **Telegram Bot:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-3. **Qase TMS:** `QASE_API_TOKEN`, `QASE_PROJECT_CODE`.
-4. **LLM Provider:** `GEMINI_API_KEY` (или `OPENAI_API_KEY`).
-5. **n8n Orchestrator:** `N8N_URL`, `N8N_API_KEY`.
-6. **GitHub Actions:** `GITHUB_TOKEN`, `GITHUB_REPOSITORY`.
+1. Jira Cloud: `ATLASSIAN_BASE_URL`, `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`, `JIRA_PROJECT_KEY`.
+2. Telegram Bot: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+3. Qase TMS: `QASE_API_TOKEN`, `QASE_PROJECT_CODE`.
+4. LLM Provider: `GEMINI_API_KEY` (или `OPENAI_API_KEY`).
+5. n8n Orchestrator: `N8N_URL`, `N8N_API_KEY`.
+6. GitHub Actions: `GITHUB_TOKEN`, `GITHUB_REPOSITORY`.
 
 ### Шаг 3: Импорт воркфлоу в инстанс n8n предприятия
-1. В интерфейсе n8n перейдите в **Workflows** -> **Import from File**.
-2. Выберите файл [`n8n/current_main_workflow.json`](file:///d:/Desktop/Juice_shop/qa-automation/n8n/current_main_workflow.json).
+1. В интерфейсе n8n перейдите в Workflows -> Import from File.
+2. Выберите файл [`n8n/current_main_workflow.json`](../n8n/current_main_workflow.json).
 3. В нодах с учетными записями выберите сохраненные Credentials вашего инстанса (Jira Account, Gemini Account, Telegram Bot).
 4. Активируйте глобальный обработчик ошибок:
    ```bash
@@ -71,29 +71,29 @@ cp .env.example .env
    ```
 
 ### Шаг 4: Настройка Jira Cloud Webhook
-В Jira перейдите в **Settings -> System -> WebHooks -> Create a Webhook**:
-- **URL:** `https://your-domain/webhook/jira-webhook`
-- **Events:**
+В Jira перейдите в Settings -> System -> WebHooks -> Create a Webhook:
+- URL: `https://your-domain/webhook/jira-webhook`
+- Events:
   - Issue: `updated`, `created`
   - Issue related: `comment_created`
-- **JQL Filter:** `project = "ВАШ_ПРОЕКТ"`
+- JQL Filter: `project = "ВАШ_ПРОЕКТ"`
 
 ---
 
-## 🗄️ 3. База данных: SQLite WAL vs PostgreSQL 16
+## 3. База данных: SQLite WAL vs PostgreSQL 16
 
 | Критерий | SQLite WAL (По умолчанию) | PostgreSQL 16 (Enterprise Cluster) |
 | :--- | :--- | :--- |
-| **Применение** | Локальная разработка, PoC, Demo, Staging | Корпоративный production, High Availability |
-| **Настройка** | Нулевая (автоматически создается в `data/qa_pipeline.db`) | Накатить [`qaops/sql/schema_postgres.sql`](file:///d:/Desktop/Juice_shop/qa-automation/qaops/sql/schema_postgres.sql) |
-| **Конфигурация** | По умолчанию | В `.env`: `DATABASE_URL=postgresql://...` |
-| **Режим блокировок**| WAL (Write-Ahead-Logging), безопасен для тредов | Row-level MVCC, распределенные транзакции |
+| Применение | Локальная разработка, PoC, Demo, Staging | Корпоративный production, High Availability |
+| Настройка | Нулевая (автоматически создается в `data/qa_pipeline.db`) | Накатить [`qaops/sql/schema_postgres.sql`](../qaops/sql/schema_postgres.sql) |
+| Конфигурация | По умолчанию | В `.env`: `DATABASE_URL=postgresql://...` |
+| Режим блокировок| WAL (Write-Ahead-Logging), безопасен для тредов | Row-level MVCC, распределенные транзакции |
 
 ---
 
-## 🔄 4. Управление версиями промптов (PromptOps)
+## 4. Управление версиями промптов (PromptOps)
 
-Любой домен промптов (DoR, аудит тест-дизайна, код-ревью, дельта-требования) версионируется в папке [`prompts/`](file:///d:/Desktop/Juice_shop/qa-automation/prompts/):
+Любой домен промптов (DoR, аудит тест-дизайна, код-ревью, дельта-требования) версионируется в папке [`prompts/`](../prompts):
 - Для отката на базовую версию укажите в `.env`:
   ```bash
   PROMPT_VERSION_DOR_EVALUATION=v1.0_baseline
@@ -102,7 +102,7 @@ cp .env.example .env
 
 ---
 
-## 🚀 5. Запуск сервисов и проверка работоспособности
+## 5. Запуск сервисов и проверка работоспособности
 
 ### 1. Проверка здоровья окружения
 ```bash
