@@ -374,8 +374,9 @@ user_email = f"test_{uuid.uuid4().hex[:8]}@juice-sh.op"
 
 | Инструмент | Где применяется в проекте | Почему именно он? |
 | :--- | :--- | :--- |
-| DeepEval (G-Eval) + Native Gemini Judge (`qaops/judge.py`) | Контур 2 / Seam 2 (Аудит тест-дизайна) | Метрики обработки естественного языка: Groundedness (проверяет, что в шагах нет выдумок) и Coverage (полнота покрытия требований). Поддерживается режим DeepEval (`QAOPS_JUDGE_BACKEND=deepeval`) и встроенный `native`-режим Gemini Flash по той же рубрике. |
-| PromptRegistry (`prompts/registry.py`) | Версионирование и управление промптами (PromptOps) | Хранение промптов в Git-версионируемых Markdown-файлах (`v1.0_baseline`, `v2.0_enterprise`), подстановка переменных и мгновенный откат через `.env`. |
+| DeepEval (G-Eval, `qaops/judge.py`) | Контур 2 / Seam 2 (Аудит тест-дизайна) и дельта-требования | Метрики обработки естественного языка: Groundedness (>= 70%, проверяет отсутствие выдумок в шагах) и Coverage (>= 80%, полнота покрытия AC). Работает через `GeminiFlashJudge(DeepEvalBaseLLM)` с автоматическим резервным переключением. |
+| KnowledgeBaseRAG + Ragas (`qaops/rag.py`) | Контур 2 / Seam 2, Gate 2 и дедупликация Qase TMS | Гибридный поиск BM25 + TF-IDF Cosine по спецификациям Confluence, контрактам OpenAPI/Pydantic и Page Objects (`pages/*.py`, `api/client.py`). Качество RAG оценивается по 4 метрикам Ragas: Context Precision (>= 80%), Context Recall (>= 80%), Faithfulness (>= 85%), Answer Relevancy (>= 85%) и Ragas Harmonic Score (>= 80%). |
+| Promptfoo + PromptRegistry (`prompts/promptfooconfig.yaml`, `qaops/promptfoo_runner.py`) | Бенчмаркинг и регрессионное тестирование промптов (PromptOps) | Сравнение версий `v1.0_baseline` и `v2.0_enterprise` по 4 доменам (`dor_evaluation`, `test_design_audit`, `code_review_audit`, `delta_refinement`) на эталонной матрице из 8 тест-кейсов (JS-40, JS-41, JS-42 и негативные ловушки). |
 | Static Code Gate (AST + Ruff + Pytest) | Контур 2 / Seam 3 (Аудит автотестов) | Исходный код нельзя оценивать текстовыми метриками! Код требует детерминированного разбора синтаксического дерева, проверки импортов и тестового сбора. |
 | Langfuse | Сквозная телеметрия вызовов ИИ | Фиксация каждого обращения: затраченные токены, задержка ответа, стоимость и версионный контекст. |
 

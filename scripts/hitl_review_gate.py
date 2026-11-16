@@ -235,10 +235,17 @@ class IndependentAiAuditor:
                 "steps_count": len(c.get("steps", []))
             })
 
+        try:
+            from qaops.rag import retrieve_context_for_issue
+            query_text = " ".join(c.get("title", "") for c in qase_cases[:8])
+            rag_ac, _ = retrieve_context_for_issue(issue_key, query_text, top_k=4)
+        except Exception:
+            rag_ac = ""
+
         prompt = get_prompt(
             "test_design_audit",
             issue_key=issue_key,
-            acceptance_criteria="",
+            acceptance_criteria=rag_ac,
             test_cases_json=json.dumps(summary_cases, indent=2, ensure_ascii=False),
         )
         return self._call_gemini(prompt)
@@ -286,8 +293,15 @@ def run_audit(issue_key: str = "JS-19", code_gate=None) -> bool:
 
     try:
         from qaops.store import record_metric
+        from qaops.rag import evaluate_rag, retrieve_context_for_issue
+        from qaops.promptfoo_runner import run_promptfoo_benchmark
+
         record_metric(issue_key, "ai_code_audit", float(ai_verdict.get("score") or 0), (ai_verdict.get("score") or 0) >= 70,
                       {"verdict": ai_verdict.get("verdict")})
+        code_text = "\n".join(Path(f["path"]).read_text(encoding="utf-8", errors="replace") for f in inspections)
+        rag_ctx, rag_hits = retrieve_context_for_issue(issue_key, code_text[:1000], top_k=5)
+        evaluate_rag(issue_key, f"{issue_key} autotests", rag_hits, code_text[:4000], rag_ctx)
+        run_promptfoo_benchmark(issue_key)
     except Exception as e:
         print(f"⚠️ Метрика AI-аудита не сохранена: {e}")
 

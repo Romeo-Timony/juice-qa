@@ -1,0 +1,122 @@
+# Promptfoo Evaluation & Regression Suite for Autonomous QAOps Platform
+# Benchmarks v1.0_baseline vs v2.0_enterprise across all 4 QAOps prompt domains
+description: "OWASP Juice Shop QAOps PromptOps Benchmark (DoR Gate, Test Design Audit, Code Review Audit, Delta Refinement)"
+
+prompts:
+  - id: dor_v1_baseline
+    label: "DoR Evaluation v1.0 (Baseline)"
+    raw: file://dor_evaluation/v1.0_baseline.md
+  - id: dor_v2_enterprise
+    label: "DoR Evaluation v2.0 (Enterprise INVEST + C06 Error Contracts)"
+    raw: file://dor_evaluation/v2.0_enterprise.md
+  - id: design_v2_enterprise
+    label: "Test Design Audit v2.0 (ISTQB + BVA/EP + OWASP)"
+    raw: file://test_design_audit/v2.0_enterprise.md
+  - id: code_review_v2_enterprise
+    label: "Code Review Audit v2.0 (AST/Ruff/POM/Pydantic/Zero-Sleep)"
+    raw: file://code_review_audit/v2.0_enterprise.md
+  - id: delta_v2_enterprise
+    label: "Delta Refinement v2.0 (Incremental BDD & Qase Sync)"
+    raw: file://delta_refinement/v2.0_enterprise.md
+
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      temperature: 0.1
+      responseMimeType: application/json
+
+defaultTest:
+  options:
+    transformVars: |
+      return { ...vars };
+
+tests:
+  - description: "[JS-40] DoR Gate: зрелое ТЗ REST API регистрации (POST /api/Users) должно проходить порог >= 80%"
+    vars:
+      domain: dor_evaluation
+      issue_key: "JS-40"
+      summary: "[API] Автоматизация серверных контрактов регистрации POST /api/Users/"
+      context: |
+        User Story: Как новый покупатель Juice Shop, я хочу зарегистрироваться через POST /api/Users/, чтобы получить доступ к заказам.
+        Acceptance Criteria:
+        AC-01: POST /api/Users/ с уникальным email, паролем (5-40 символов) и securityQuestion возвращает HTTP 201 Created и схему UserRegistrationResponse.
+        AC-02: Дубликат email возвращает HTTP 400 Bad Request (email must be unique).
+        AC-03: Пустой email или пароль возвращает HTTP 400 Invalid email/password cannot be empty.
+        AC-04: Защита от SQL-инъекций и XSS в поле email.
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.score >= 80 && output.verdict === 'PASS'"
+
+  - description: "[JS-41] DoR Gate: зрелое ТЗ UI формы регистрации (/#/register) должно проходить порог >= 80%"
+    vars:
+      domain: dor_evaluation
+      issue_key: "JS-41"
+      summary: "[UI] Автоматизация клиентской формы регистрации и валидации полей /#/register"
+      context: |
+        User Story: Как гость магазина, я хочу заполнить форму /#/register с реактивной валидацией полей.
+        Acceptance Criteria:
+        AC-01: Кнопка #registerButton заблокирована (disabled) при пустых или невалидных полях.
+        AC-02: Невалидный email показывает ошибку 'Email address is not valid.', короткий пароль < 5 символов показывает 'Password must be 5-40 characters long.'.
+        AC-03: При несовпадении паролей выводится 'Passwords do not match'.
+        AC-04: Успешная отправка показывает уведомление 'Registration completed successfully' и редиректит на /#/login.
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.score >= 80 && output.verdict === 'PASS'"
+
+  - description: "[JS-42] DoR Gate: зрелое ТЗ сквозного E2E сценария онбординга покупателя должно проходить порог >= 80%"
+    vars:
+      domain: dor_evaluation
+      issue_key: "JS-42"
+      summary: "[E2E] Сквозной сценарий регистрации, входа и управления профилем покупателя"
+      context: |
+        User Story: Как зарегистрированный покупатель, я хочу пройти полный путь от регистрации до входа и смены пароля.
+        Acceptance Criteria:
+        AC-01: Регистрация нового аккаунта через UI /#/register -> редирект на /#/login.
+        AC-02: Вход под созданным аккаунтом -> выдача Bearer JWT токена и переход в каталог.
+        AC-03: Смена пароля и проверка повторного входа с новым паролем, обработка 401 при старом пароле.
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.score >= 80 && output.verdict === 'PASS'"
+
+  - description: "[JS-BAD-DOR] DoR Gate: размытое ТЗ без критериев приемки и контрактов ошибок должно отклоняться (< 80%)"
+    vars:
+      domain: dor_evaluation
+      issue_key: "JS-999"
+      summary: "Сделать страницу регистрации быстро и удобно"
+      context: "Нужно сделать форму регистрации пользователя, чтобы все работало быстро, красиво и и т.д. TBD."
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.score < 80 && output.verdict === 'FAIL'"
+
+  - description: "[JS-40] Test Design Audit: проверка набора BDD тест-кейсов Qase TMS на полноту BVA/EP/OWASP"
+    vars:
+      domain: test_design_audit
+      issue_key: "JS-40"
+      acceptance_criteria: "AC-01: 201 Created POST /api/Users; AC-02: 400 duplicate email; AC-03: BVA 4/5/40/41 chars; AC-04: SQLi/XSS."
+      test_cases_json: '[{"id": 633, "title": "POST /api/Users valid 201", "automation": "to-be-automated"}, {"id": 634, "title": "Duplicate email 400", "automation": "to-be-automated"}, {"id": 635, "title": "Password BVA 4 and 41 chars", "automation": "to-be-automated"}, {"id": 636, "title": "SQLi payload in email", "automation": "to-be-automated"}]'
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.coverage_score >= 85 && output.verdict === 'ACCEPT'"
+
+  - description: "[JS-41] Code Review Audit: обнаружение антипаттерна time.sleep и проверка POM/Pydantic/Allure"
+    vars:
+      domain: code_review_audit
+      code_snippets: |
+        @allure.title("Регистрация нового пользователя")
+        @pytest.mark.qase(id=633)
+        def test_tc633_register_valid_user(register_page):
+            with allure.step("Arrange"):
+                email = f"test_{uuid.uuid4().hex[:8]}@juice-sh.op"
+            with allure.step("Act"):
+                register_page.register_user(email, "Secret123!", "Mother's maiden name?", "Smith")
+            with allure.step("Assert"):
+                expect(register_page.success_snackbar).to_be_visible()
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "output.score >= 90 && output.verdict === 'ACCEPT'"

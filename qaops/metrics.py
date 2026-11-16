@@ -65,13 +65,23 @@ def release_quality(issue_key: str) -> Dict[str, Any]:
         gate("LLM-as-a-Judge Coverage", m.get("llm_judge_coverage", {}).get("value"), ">= 80%", m.get("llm_judge_coverage", {}).get("passed")),
         gate("AI Code Audit Score", (m.get("ai_code_audit", {}).get("value")), ">= 70/100", m.get("ai_code_audit", {}).get("passed")),
     ]
+    ai_eval_metrics = [
+        gate("DeepEval Groundedness (G-Eval)", m.get("llm_judge_groundedness", {}).get("value"), f">= {settings.groundedness_min:.0%}",
+             m.get("llm_judge_groundedness", {}).get("passed")),
+        gate("Ragas Context Precision", m.get("ragas_context_precision", {}).get("value"), ">= 80%", m.get("ragas_context_precision", {}).get("passed")),
+        gate("Ragas Context Recall", m.get("ragas_context_recall", {}).get("value"), ">= 80%", m.get("ragas_context_recall", {}).get("passed")),
+        gate("Ragas Faithfulness", m.get("ragas_faithfulness", {}).get("value"), ">= 85%", m.get("ragas_faithfulness", {}).get("passed")),
+        gate("Ragas Answer Relevancy", m.get("ragas_answer_relevancy", {}).get("value"), ">= 85%", m.get("ragas_answer_relevancy", {}).get("passed")),
+        gate("Ragas Harmonic Score", m.get("ragas_harmonic_score", {}).get("value"), f">= {settings.ragas_min:.0%}", m.get("ragas_harmonic_score", {}).get("passed")),
+        gate("Promptfoo Benchmark Pass Rate", m.get("promptfoo_pass_rate", {}).get("value"), "= 100%", m.get("promptfoo_pass_rate", {}).get("passed")),
+    ]
 
     measured = [g for g in gates if g["passed"] is not None]
     missing = [g["metric"] for g in gates if g["passed"] is None]
     failed = [g["metric"] for g in measured if not g["passed"]]
 
     scores = []
-    for g in gates + advisory:
+    for g in gates + advisory + [em for em in ai_eval_metrics if em["value"] is not None]:
         v = g["value"]
         if v is None:
             continue
@@ -90,6 +100,7 @@ def release_quality(issue_key: str) -> Dict[str, Any]:
         "release_quality_index": index,
         "hard_gates": gates,
         "advisory": advisory,
+        "ai_eval_metrics": ai_eval_metrics,
         "failed": failed,
         "missing": missing,
         "idempotency": idem,
@@ -106,9 +117,9 @@ def format_jira(report: Dict[str, Any]) -> List[str]:
         f"h4. 📈 Индекс Качества Релиза: *{report['release_quality_index']}* / 100 — решение: *{report['decision']}*",
         "||Метрика||Значение||Цель||Статус||",
     ]
-    for g in report["hard_gates"] + report["advisory"]:
+    for g in report["hard_gates"] + report["advisory"] + [em for em in report.get("ai_eval_metrics", []) if em["value"] is not None]:
         v = g["value"]
-        shown = "—" if v is None else (f"{v:.0%}" if isinstance(v, float) and v <= 1 and "Score" not in g["metric"] else str(v))
+        shown = "—" if v is None else (f"{v:.0%}" if isinstance(v, float) and v <= 1 and "Score" not in g["metric"] else (f"{v:.1%}" if isinstance(v, float) and v <= 1 else str(v)))
         lines.append(f"|{g['metric']}|{shown}|{g['target']}|{icon[g['passed']]}|")
     t = report["telemetry"]
     lines.append(f"_Телеметрия: spans {t['spans']}, ошибок {t['errors']}, p95 {t['p95_latency_ms']} ms, "

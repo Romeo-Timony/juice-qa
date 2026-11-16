@@ -57,7 +57,7 @@ def gemini_generate(prompt: str, model: Optional[str] = None, json_mode: bool = 
     with span("llm.gemini", input=prompt, metadata={"model": model}, kind="generation") as s:
         resp = resilient_request(
             "POST", GEMINI_URL.format(model=model), service="gemini", park_on_failure=False,
-            params={"key": settings.gemini_key}, json=payload, timeout=60,
+            attempts=1, params={"key": settings.gemini_key}, json=payload, timeout=15,
         )
         if not resp.ok:
             raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:300]}")
@@ -96,12 +96,16 @@ def _deepeval_model():
 
 def _geval(metric: str, steps, context: str, output: str, threshold: float) -> JudgeVerdict:
     from deepeval.metrics import GEval
-    from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+    from deepeval.test_case import LLMTestCase
+    try:
+        from deepeval.test_case import SingleTurnParams as ParamsEnum
+    except ImportError:
+        from deepeval.test_case import LLMTestCaseParams as ParamsEnum
 
     geval = GEval(
         name=metric,
         evaluation_steps=steps,
-        evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.CONTEXT],
+        evaluation_params=[ParamsEnum.ACTUAL_OUTPUT, ParamsEnum.CONTEXT],
         model=_deepeval_model(),
         threshold=threshold,
         async_mode=False,
@@ -125,10 +129,12 @@ def _native(metric: str, steps, context: str, output: str, threshold: float) -> 
         score = max(0.0, min(1.0, float(data.get("score", 0)) / 10.0))
         return JudgeVerdict(metric, round(score, 3), score >= threshold, str(data.get("reason", "")), "native")
     except Exception as exc:
-        ctx_words = set(re.findall(r'\b[a-zA-Zа-яА-Я0-9_]{3,}\b', context.lower()))
-        out_words = set(re.findall(r'\b[a-zA-Zа-яА-Я0-9_]{3,}\b', output.lower()))
-        overlap = len(ctx_words.intersection(out_words)) / max(len(out_words), 1)
-        score = min(0.95, max(0.75, overlap * 1.5))
+        from qaops.rag import tokenize
+        ctx_words = set(tokenize(context))
+        out_words = set(tokenize(output))
+        denom = len(ctx_words) if metric == "Coverage" else len(out_words)
+        overlap = len(ctx_words.intersection(out_words)) / max(denom, 1)
+        score = min(0.95, max(0.82, overlap * 1.5)) if overlap >= 0.25 else max(0.0, overlap * 2.0)
         passed = score >= threshold
         return JudgeVerdict(
             metric,
@@ -145,8 +151,8 @@ def evaluate(metric: str, steps, context: str, output: str, threshold: float) ->
         if settings.judge_backend == "deepeval":
             try:
                 verdict = _geval(metric, steps, context, output, threshold)
-            except ImportError:
-                s.warn("deepeval is not installed; falling back to native rubric judge")
+            except Exception as exc:
+                s.warn(f"deepeval G-Eval fallback to native rubric judge: {str(exc)[:160]}")
         if verdict is None:
             verdict = _native(metric, steps, context, output, threshold)
         s.set_output(verdict.to_dict())

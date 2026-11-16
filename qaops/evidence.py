@@ -107,8 +107,8 @@ def build_evidence_block(
         lines = [
             "h3. 🧾 QAOps Evidence Pack для Senior AQA (Human-in-the-Loop)",
             "",
-            "h4. ⚖️ LLM-as-a-Judge",
-            f"• *Покрытие AC тест-кейсами (G-Eval Coverage):* {coverage['value'] if coverage['value'] is not None else '—'} "
+            "h4. ⚖️ LLM-as-a-Judge (DeepEval & Ragas & Promptfoo)",
+            f"• *Покрытие AC тест-кейсами (DeepEval G-Eval Coverage):* {coverage['value'] if coverage['value'] is not None else '—'} "
             f"{'(/)' if coverage['passed'] else '(x)' if coverage['passed'] is False else '(?)'}",
             f"• *Код-ревью автотестов:* {ai_verdict.get('verdict', '—')} ({ai_verdict.get('score', '—')}/100) — {str(ai_verdict.get('summary', ''))[:300]}",
             "",

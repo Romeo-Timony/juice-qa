@@ -316,8 +316,10 @@ sequenceDiagram
   - Testable: `C04` (позитивные AC), `C06` (негативные и граничные проверки)
 - CLI-экспорт схем в JSON Schema для валидаторов n8n: `python -m qaops.contracts --export`.
 
-#### 2. Слой семантического аудита ([`qaops/judge.py`](./qaops/judge.py), [`qaops/design_gate.py`](./qaops/design_gate.py))
-- G-Eval Groundedness: проверяет, что каждый тест-кейс непосредственно следует из Acceptance Criteria постановки задачи, исключая галлюцинации LLM.
+#### 2. Слой семантического аудита, RAG и PromptOps ([`qaops/judge.py`](./qaops/judge.py), [`qaops/design_gate.py`](./qaops/design_gate.py), [`qaops/rag.py`](./qaops/rag.py), [`qaops/promptfoo_runner.py`](./qaops/promptfoo_runner.py))
+- DeepEval G-Eval (`Groundedness >= 70%`, `Coverage >= 80%`): проверяет через `GeminiFlashJudge(DeepEvalBaseLLM)`, что каждый тест-кейс следует из Acceptance Criteria и извлеченного контекста.
+- KnowledgeBaseRAG + Ragas ([`qaops/rag.py`](./qaops/rag.py)): индексирует спецификации Confluence/Jira, контракты Pydantic/OpenAPI и код Page Objects (`pages/*.py`, `api/client.py`), извлекает релевантные чанки по гибридной метрике BM25 + TF-IDF Cosine и вычисляет 4 метрики Ragas (`Context Precision >= 80%`, `Context Recall >= 80%`, `Faithfulness >= 85%`, `Answer Relevancy >= 85%`, `Harmonic Score >= 80%`).
+- Promptfoo Benchmark ([`prompts/promptfooconfig.yaml`](./prompts/promptfooconfig.yaml), [`qaops/promptfoo_runner.py`](./qaops/promptfoo_runner.py)): прогоняет матрицу из 8 эталонных сценариев по 4 доменам промптов (`v1.0_baseline` vs `v2.0_enterprise`), фиксируя `promptfoo_pass_rate = 100%`.
 - Pruning Logic: отфильтровывает тест-кейсы без явного флага `automation` (`to-be-automated`, `manual`, `automated`), предотвращая засорение репозитория неразмеченными тестами.
 
 #### 3. Слой статической проверки ([`qaops/code_gate.py`](./qaops/code_gate.py))
@@ -375,11 +377,18 @@ sequenceDiagram
 | Idempotency Leaks | Seam 4 (Resilience)| 0 | SQLite `qaops_idempotency` audit | Остановка мутаций, предотвращение дублей |
 | Recovery Rate | Seam 4 (Resilience)| >= 85% | Статистика повторов и `qaops_outbox` | Оповещение дежурного инженера |
 
-### Консультативные метрики (Advisory Gates)
+### Консультативные и AI-метрики оценки (Advisory & AI Evaluation Gates)
 
 | Метрика | Точка контроля | Рекомендуемое значение | Назначение |
 | :--- | :--- | :---: | :--- |
-| LLM-as-a-Judge Coverage | Seam 2 / 5 | >= 80% | Полнота покрытия позитивных и негативных AC |
+| LLM-as-a-Judge Coverage (DeepEval G-Eval) | Seam 2 / 5 | >= 80% | Полнота покрытия позитивных, негативных и граничных AC |
+| DeepEval Groundedness (G-Eval) | Seam 2 (`qaops/judge.py`) | >= 70% | Опора шагов каждого тест-кейса на AC и контракты |
+| Ragas Context Precision | Seam 2 / Gate 2 (`qaops/rag.py`) | >= 80% | Точность извлеченных RAG-фрагментов спецификаций и кода |
+| Ragas Context Recall | Seam 2 / Gate 2 (`qaops/rag.py`) | >= 80% | Полнота извлечения всех правил и контрактов ТЗ |
+| Ragas Faithfulness | Seam 2 / Gate 2 (`qaops/rag.py`) | >= 85% | Достоверность сгенерированных кейсов/кода относительно контекста |
+| Ragas Answer Relevancy | Seam 2 / Gate 2 (`qaops/rag.py`) | >= 85% | Соответствие результата бизнес-цели задачи |
+| Ragas Harmonic Score | Seam 2 / 6 (`qaops/rag.py`) | >= 80% | Гармоническое среднее 4 метрик Ragas |
+| Promptfoo Benchmark Pass Rate | PromptOps (`qaops/promptfoo_runner.py`) | = 100% | Прохождение 8 эталонных контрактов промптов (`v1.0` vs `v2.0`) |
 | AI Code Audit Score | Seam 5 (HITL) | >= 70 / 100 | Оценка чистоты кода, селекторов и ассертов |
 | Execution Latency p95 | Seam 6 (Telemetry) | < 15 сек на шаг | Контроль деградации производительности LLM/API |
 

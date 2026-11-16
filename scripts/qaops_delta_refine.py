@@ -64,20 +64,18 @@ def fetch_existing_cases_and_suite(issue_key: str) -> Dict[str, Any]:
 
 
 def generate_delta_test_cases_ai(issue_key: str, existing_cases: List[Dict[str, Any]], delta_prompt: str) -> List[Dict[str, Any]]:
-    """Обращается к Gemini API для проектирования только НОВЫХ тест-кейсов на основе дельта-требований."""
+    """Обращается к Gemini API (через PromptRegistry + RAG) для проектирования НОВЫХ тест-кейсов по дельта-требованиям."""
+    from prompts.registry import get_prompt
+    from qaops.rag import retrieve_context_for_issue
+
     existing_titles = [f"#{c.get('id')} {c.get('title')}" for c in existing_cases]
-    
-    system_instruction = (
-        "Ты — Senior QA Automation Lead и Pentesting Security Specialist для проекта OWASP Juice Shop.\n"
-        "Твоя задача — инкрементально расширить тестовое покрытие новыми требованиями.\n"
-        "КРИТИЧЕСКИ ВАЖНО: НЕ ДУБЛИРУЙ уже существующие тест-кейсы!\n\n"
-        "СТРАТЕГИЯ ПИРАМИДЫ ТЕСТИРОВАНИЯ И КРИТИЧНОСТИ (automation: 'to-be-automated' vs 'manual'):\n"
-        "1. automation = 'to-be-automated':\n"
-        "   - Назначается ТОЛЬКО для критических P1/Blocker/Critical сценариев (основная авторизация, строгие валидации, критические уязвимости безопасности OWASP SQLi/XSS, ядро бизнес-логики).\n"
-        "2. automation = 'manual':\n"
-        "   - Назначается для сложных нестандартных проверок, нативных диалогов ОС (загрузка файлов OS file picker), верстки/дизайна, редких анимаций, капч и эвристических проверок (для минимизации хрупких UI-тестов).\n\n"
-        "Спроектируй от 1 до 2 качественных, проверяемых тест-кейсов по стандарту BDD Gherkin и Allure.\n"
-        "Отвечай СТРОГО в формате JSON без markdown-оберток."
+    rag_ctx, _ = retrieve_context_for_issue(issue_key, delta_prompt, top_k=3)
+
+    system_instruction = get_prompt(
+        "delta_refinement",
+        issue_key=issue_key,
+        existing_cases="\n".join(existing_titles[:15]),
+        delta_requirement=f"{delta_prompt}\n\n[RAG Context]\n{rag_ctx}",
     )
 
     user_query = f"""

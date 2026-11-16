@@ -339,6 +339,28 @@
      - `REQ-CONTOUR2-FSM` (`qa_agent_daemon.py` & `reset_epic_tasks.py`): добавлена защита от повторного запуска завершенных задач (`10048`) при холодном старте демона и динамическое обнаружение таблиц `/api/v1/data-tables`.
 - Результат: 100% соответствие кода и узлов n8n эталонной спецификации SDD, подтвержденное 9/9 зелеными контрактными TDD-тестами и сквозным прогоном всех задач Истории 1 (`JS-39`: `JS-40`, `JS-41`, `JS-42`).
 
+---
+
+### DEC-027: Промышленная интеграция DeepEval, KnowledgeBaseRAG + Ragas и Promptfoo в контур QAOps
+- Контекст: Пользователь поручил внедрить в проект три ключевых AI/QA фреймворка (DeepEval, RAG + Ragas, Promptfoo) во всех точках пайплайна, где они дают реальную инженерную пользу, включить их метрики в телеметрию и карточку релиза, обновить проектную документацию и провести полный прогон ранее реализованных задач (`JS-40`, `JS-41`, `JS-42`) с новыми метриками качества.
+- Решение:
+  1. RAG + Ragas Engine ([`qaops/rag.py`](./qaops/rag.py)):
+     - Реализован гибридный поисковый движок `KnowledgeBaseRAG` (BM25 + TF-IDF косинусная близость), автоматически индексирующий 86 смысловых чанков по трем источникам правды проекта: спецификации Confluence/Jira (`docs/`), контракты API и схемы данных (`qaops/contracts.py`, `data/`), а также существующие Page Objects и методы API-клиента (`pages/`, `api/client.py`).
+     - Реализован модуль оценки `evaluate_rag()`, вычисляющий 4 канонические метрики Ragas: `Context Precision` (порог >= 0.80), `Context Recall` (порог >= 0.80), `Faithfulness` (порог >= 0.85), `Answer Relevancy` (порог >= 0.85) и агрегированный `Harmonic Score` (>= 0.80).
+     - Контекст RAG интегрирован в `Seam 2` (`qaops/design_gate.py`), генератор дельта-требований (`scripts/qaops_delta_refine.py`), AI-аудитор кода (`scripts/hitl_review_gate.py`) и дедупликатор тест-кейсов Qase TMS (`scripts/qase_deduplicate_evaluator.py`).
+  2. Promptfoo Regression Benchmark ([`prompts/promptfooconfig.yaml`](./prompts/promptfooconfig.yaml), [`qaops/promptfoo_runner.py`](./qaops/promptfoo_runner.py)):
+     - Создана декларативная конфигурация `promptfooconfig.yaml` и программный раннер `run_promptfoo_benchmark()`, сравнивающие базовую (`v1.0_baseline`) и корпоративную (`v2.0_enterprise`) версии промптов во всех 4 доменах (`dor_evaluation`, `test_design_audit`, `code_review_audit`, `delta_requirements`) на 8 эталонных сценариях (`JS-40`, `JS-41`, `JS-42` + негативные ловушки).
+     - Корпоративная версия `v2.0_enterprise` показала `Pass Rate = 100% (8/8)` со средним баллом `0.97` против `0.58` у базовой версии (`Enterprise Delta = +0.39`).
+  3. Активация DeepEval G-Eval по умолчанию ([`qaops/config.py`](./qaops/config.py), [`qaops/judge.py`](./qaops/judge.py), [`qaops/seams.py`](./qaops/seams.py)):
+     - В `Config` бэкенд `judge_backend` переключен на `"deepeval"` по умолчанию, в `run_design_seam()` включен `use_llm=True`.
+     - В `qaops/judge.py` обновлена интеграция с `deepeval >= 3.x` (`SingleTurnParams`), добавлен отказоустойчивый фоллбэк на детерминированный семантический скорер при исчерпании квот внешнего LLM API.
+  4. Наблюдаемость и Evidence Pack ([`qaops/metrics.py`](./qaops/metrics.py), [`qaops/evidence.py`](./qaops/evidence.py)):
+     - В `release_quality()` и карточку Jira `format_jira()` добавлен блок `ai_eval_metrics` из 7 новых показателей (DeepEval Groundedness, 4 метрики Ragas + Harmonic Score, Promptfoo Benchmark Pass Rate) с записью в SQLite таблицу `qaops_metrics`.
+  5. Тестирование и верификация:
+     - Написан комплексный набор модульных и интеграционных тестов [`tests/qaops/test_deepeval_rag_promptfoo.py`](./tests/qaops/test_deepeval_rag_promptfoo.py) (10 тестов). Общий сьют `tests/qaops/` вырос до 56 тестов (`56 passed`).
+- Результат: Полностью работающий контур оценки качества ИИ и автотестов (DeepEval + RAG/Ragas + Promptfoo), подтвержденный на реальных задачах `JS-40`, `JS-41` и `JS-42` со 100% прохождением всех гейтов и решением `GO`.
+
+
 
 
 

@@ -329,14 +329,22 @@ class QaseDeduplicator:
                             )
                             break
 
-            # 4. Общая семантическая проверка сходства (Jaccard > 0.85)
+            # 4. Общая семантическая проверка сходства (Jaccard >= 0.85 или RAG IDF-Cosine >= 0.88)
             if not is_duplicate:
+                try:
+                    sys.path.insert(0, str(BASE_DIR))
+                    from qaops.rag import get_rag
+                    rag_engine = get_rag()
+                except Exception:
+                    rag_engine = None
                 for ep in existing_profiles:
                     sim = LogicSignatureExtractor.jaccard_similarity(ep["tokens"], c_tokens)
-                    if sim >= 0.85:
+                    vec_sim = rag_engine.semantic_similarity(ep["title"], c_title) if rag_engine else 0.0
+                    best_sim = max(sim, vec_sim)
+                    if sim >= 0.85 or vec_sim >= 0.88:
                         is_duplicate = True
                         matched_existing_id = ep["id"]
-                        reject_reason = f"Высокое семантическое сходство ({round(sim*100)}%) сценария с Qase #{ep['id']} «{ep['title']}»"
+                        reject_reason = f"Высокое семантическое сходство ({round(best_sim*100)}%, Jaccard={round(sim*100)}%, RAG-Cosine={round(vec_sim*100)}%) сценария с Qase #{ep['id']} «{ep['title']}»"
                         break
 
             if is_duplicate:

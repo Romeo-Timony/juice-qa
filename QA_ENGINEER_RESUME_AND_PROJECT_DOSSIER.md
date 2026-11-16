@@ -13,7 +13,7 @@
 Комплекс объединяет:
 1. Фреймворк автоматизации тестирования на Python 3.12 (Pytest + Playwright + Requests + Pydantic v2 + Allure);
 2. Событийно-ориентированную оркестрацию на n8n и Python Daemon;
-3. AI-агентов (LLM-as-a-Judge на базе Gemini 2.5 Flash / DeepEval) для автоматической валидации требований (DoR), генерации тест-дизайна и аудита кода;
+3. AI-агентов и платформы оценки качества ИИ: DeepEval G-Eval (Gemini 2.5 Flash) для семантического аудита тест-дизайна (Groundedness, Coverage), KnowledgeBaseRAG + Ragas для обогащения требований реальным контекстом кодовой базы (Context Precision, Context Recall, Faithfulness, Answer Relevancy) и Promptfoo для автоматизированного бенчмаркинга и регрессионного тестирования системных промптов (v1.0_baseline vs v2.0_enterprise);
 4. Промышленный контур QAOps с 6 архитектурными швами (Seams 1-6): контрактный контроль (INVEST), идемпотентность, персистентный Circuit Breaker, человеко-машинный контроль (HITL) и телеметрия со сквозным расчетом Release Quality Index (RQI);
 5. CI/CD в GitHub Actions с параллельным запуском, записью видео-скринкастов (WebM), публикацией отчетов Allure на GitHub Pages и мгновенными оповещениями команды в Telegram.
 
@@ -87,7 +87,7 @@ OWASP Juice Shop - сложная распределенная одностра�
    - Генерация отчетов покрытия в формате Markdown и прикрепление к Jira.
 4. Контур QAOps: 6 Архитектурных Швов (Industrial Seams):
    - Seam 1 (DoR Gate): Проверка контракта User Story по критериям INVEST (Independent, Negotiable, Valuable, Estimable, Small, Testable). При неполноте требований задача автоматически блокируется меткой `qa-paused` без допуска в спринт.
-   - Seam 2 (Semantic Design Gate): Оценка сгенерированных кейсов AI-судьей (Gemini Flash + DeepEval G-Eval) на предмет привязки к Acceptance Criteria (Groundedness). Автоматический прунинг неразмеченных тестов.
+   - Seam 2 (Semantic Design Gate + RAG/Ragas + Promptfoo + DeepEval): Обогащение Acceptance Criteria через гибридный поиск KnowledgeBaseRAG (BM25 + TF-IDF) по спецификациям, Pydantic-контрактам и Page Objects; верификация контекста по 4 метрикам Ragas (Context Precision, Context Recall, Faithfulness, Answer Relevancy, порог >= 0.80); проверка версий системных промптов через Promptfoo (Pass Rate 100%); оценка сгенерированных кейсов AI-судьей DeepEval G-Eval на предмет привязки к требованиям (Groundedness >= 0.90) и полноты покрытия (Coverage >= 0.85) с автоматическим отсевом галлюцинаций.
    - Seam 3 (Static Code Gate): Валидация синтаксического дерева через `ast.parse`, проверка линтером Ruff (блокирующие ошибки E9, F82), проверка сбора через `pytest --collect-only` в изолированном Docker-контейнере без доступа в сеть (`--network none`).
    - Seam 4 (Idempotency & External Resilience): Гарантия ровно одного выполнения мутаций (Jira, Qase, Git push) через SQLite `BEGIN IMMEDIATE` транзакции (ключи `SHA-256(scope + args)`). Персистентный Circuit Breaker (CLOSED/OPEN/HALF_OPEN), повторные попытки с экспоненциальным Backoff и полным джиттером, Outbox-паттерн с CLI-реплеем.
    - Seam 5 (Human-in-the-Loop Quality Gate 2): Сборка структурированного Evidence Pack в комментарии Jira (метрики LLM-Judge, AST, Ruff, Allure-вложения, ссылка на трейс). Автоматический переход к слиянию только после аппрува инженера (`ok` / эмодзи).
@@ -103,13 +103,15 @@ OWASP Juice Shop - сложная распределенная одностра�
 | Метрика | Значение | Как измеряется | Бизнес-эффект |
 | :--- | :---: | :--- | :--- |
 | Schema Compliance Rate (DoR Gate) | 100% | Pydantic v2 валидация в Seam 1 | Полное исключение задач с неполными требованиями из разработки |
-| Test Design Integrity | >= 92% | G-Eval Groundedness + детерминированный аудит тегов | 0 галлюцинированных или оторванных от требований тест-кейсов |
+| Test Design Integrity & DeepEval Groundedness | >= 92% | DeepEval G-Eval Groundedness + детерминированный аудит тегов | 0 галлюцинированных или оторванных от требований тест-кейсов |
+| Ragas RAG Quality (4 метрики + Harmonic Score) | >= 96% | Context Precision, Context Recall, Faithfulness, Answer Relevancy | Точное извлечение селекторов Page Objects, эндпоинтов API и Pydantic-контрактов |
+| Promptfoo Regression Benchmark | 100% (8/8) | Автоматическое сравнение промптов v1.0_baseline vs v2.0_enterprise | Защита от регрессии промптов в 4 доменах (DoR, Test Design, Code Review, Delta) |
 | Syntax & Collect Validity | 100% | AST parse + Ruff + Docker изолированный collect | Предотвращение поломки CI/CD из-за синтаксических ошибок в сгенерированном коде |
 | Idempotency Leaks | 0 | SQLite `qaops_idempotency` audit | Исключение дублирования тикетов, веток, пушей и прогонов |
 | Recovery Rate (External Outages) | >= 88% | Статистика Circuit Breaker и Outbox | Бесперебойная работа при сбоях внешних API (Jira/Qase/Gemini) |
-| Release Quality Index (RQI) | 0-100 | Модуль `qaops.metrics` | Объективное математическое решение о допуске релиза в прод (Hard Gates) |
+| Release Quality Index (RQI) | 97.9 / 100 | Модуль `qaops.metrics` (5 Hard Gates + 2 Advisory + 7 AI Eval) | Объективное математическое решение о допуске релиза в прод (GO / NO-GO) |
 | Время полного прогона тестов | < 3 мин | Параллельное исполнение в CI/CD | Быстрый Time-to-Feedback для инженеров |
-| Покрытие автоматизацией тестового контура | 27 unit-тестов | Pytest в `tests/qaops/` (Seams 1-6) | 100% стабильность и предсказуемость самого фреймворка |
+| Покрытие автоматизацией тестового контура | 56 unit-тестов | Pytest в `tests/qaops/` (Seams 1-6 + DeepEval/RAG/Promptfoo) | 100% стабильность и предсказуемость самого фреймворка |
 
 ---
 
@@ -125,7 +127,7 @@ OWASP Juice Shop - сложная распределенная одностра�
 ### Вариант 2: Для позиции QA Lead / QAOps Architect
 - Разработал архитектуру автономного контура обеспечения качества QAOps на базе 6 контрольных швов (Seams 1-6), снизив время подготовки тестового покрытия на 70%.
 - Внедрил автоматический DoR Gate (Seam 1) на базе Pydantic-контрактов для аудита пользовательских историй в Jira Cloud по критериям INVEST.
-- Развернул подсистему семантического тест-дизайна с использованием LLM-as-a-Judge (Gemini Flash / DeepEval) для проверки обоснованности кейсов (Groundedness >= 90%).
+- Развернул подсистему семантического тест-дизайна с использованием гибридного поиска KnowledgeBaseRAG + Ragas (Context Precision/Recall >= 0.95), регрессионного бенчмаркинга промптов Promptfoo (100% Pass Rate на 4 доменах) и LLM-as-a-Judge DeepEval G-Eval (Gemini Flash, Groundedness >= 90%, Coverage >= 85%).
 - Спроектировал подсистему отказоустойчивости и идемпотентности (Seam 4): транзакции SQLite `BEGIN IMMEDIATE`, Circuit Breaker, Exponential Jitter Backoff и Outbox-паттерн, гарантировавшие 0 утечек дублирующих операций.
 - Разработал модуль расчета индекса качества релиза (Release Quality Index, RQI 0-100) с жесткими гейтами (Hard Gates) для автоматического принятия решения GO / NO-GO перед релизом.
 - Настроил процесс Human-in-the-Loop (Gate 2) с автоматической генерацией Evidence Pack в Jira и аппрувом слияния веток через Git Worktree.
@@ -142,7 +144,7 @@ OWASP Juice Shop - сложная распределенная одностра�
 | Тестовая отчетность и TMS | Allure Report, Qase TMS (REST API & Webhooks), Allure Steps & cURL attachments, WebM screencasting |
 | CI/CD и DevOps | GitHub Actions, Git Worktree, Docker (`python:3.12-slim`), GitHub Pages, ngrok/Cloudflare Tunnels |
 | Оркестрация и автоматизация процессов | n8n (Webhooks, Node workflow logic), Atlassian Jira Cloud (REST API, Webhooks, JQL, Transitions) |
-| AI в тестировании (AI in QA) | Gemini 2.5 Flash, DeepEval (G-Eval), LLM-as-a-Judge, Groundedness scoring, Prompt Engineering |
+| AI в тестировании (AI in QA & EvalOps) | Gemini 2.5 Flash, DeepEval (G-Eval Groundedness & Coverage), KnowledgeBaseRAG + Ragas (Context Precision, Context Recall, Faithfulness, Answer Relevancy), Promptfoo (Prompt Versioning & Regression Benchmarks), LLM-as-a-Judge |
 | Наблюдаемость и телеметрия | Langfuse Tracing, PII Sanitization, SQLite WAL storage, p95 latency tracking, Release Quality Index (RQI) |
 | Мессенджеры и алертинг | Telegram Bot API, линейные стейт-машины уведомлений |
 

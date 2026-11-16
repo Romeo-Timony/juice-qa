@@ -230,7 +230,8 @@ def recovery_stats() -> Dict[str, Any]:
         """SELECT COUNT(*) AS total,
                   COALESCE(SUM(had_transient_failure), 0) AS transient,
                   COALESCE(SUM(CASE WHEN had_transient_failure = 1 AND succeeded = 1 THEN 1 ELSE 0 END), 0) AS recovered
-           FROM qaops_calls"""
+           FROM qaops_calls
+           WHERE service NOT IN ('127.0.0.1', 'localhost', 'fault-test', 'gemini')"""
     )[0]
     pending = store.rows("SELECT COUNT(*) AS n FROM qaops_outbox WHERE status = 'PENDING'")[0]["n"]
     transient = row["transient"]

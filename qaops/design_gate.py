@@ -46,6 +46,8 @@ class DesignGateResult:
     dropped_case_ids: List[int]
     reviews: List[CaseReview]
     coverage: Optional[Dict[str, Any]] = None
+    ragas: Optional[Dict[str, Any]] = None
+    promptfoo: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -119,15 +121,37 @@ def run_design_gate(issue_key: str, cases: List[Dict[str, Any]], acceptance_crit
         reviews = [deterministic_review(c) for c in cases]
         by_id = {int(c.get("id", 0)): c for c in cases}
 
+        ragas_dict: Optional[Dict[str, Any]] = None
+        promptfoo_dict: Optional[Dict[str, Any]] = None
+        all_cases_text = "\n\n".join(case_as_text(c) for c in cases)
+
+        if cases:
+            try:
+                from qaops.rag import evaluate_rag, retrieve_context_for_issue
+                from qaops.promptfoo_runner import run_promptfoo_benchmark
+
+                query_seed = acceptance_criteria or " ".join(c.get("title", "") for c in cases[:6])
+                rag_ctx, rag_hits = retrieve_context_for_issue(issue_key, query_seed, top_k=5)
+                ragas_verdict = evaluate_rag(issue_key, query_seed, rag_hits, all_cases_text, query_seed)
+                ragas_dict = ragas_verdict.to_dict()
+                pf_rep = run_promptfoo_benchmark(issue_key)
+                promptfoo_dict = {"pass_rate": pf_rep.pass_rate, "enterprise_score": pf_rep.avg_enterprise_score, "gain_pct": pf_rep.enterprise_gain_pct}
+            except Exception as rag_exc:
+                rag_ctx = ""
+                s.warn(f"RAG/Promptfoo enrichment warning: {rag_exc}")
+        else:
+            rag_ctx = ""
+
         if use_llm and cases:
             ac = acceptance_criteria if acceptance_criteria is not None else fetch_acceptance_criteria(issue_key)
+            enriched_ac = f"{ac}\n\n{rag_ctx}".strip() if rag_ctx else ac
             from concurrent.futures import ThreadPoolExecutor
             from qaops.judge import judge_coverage, judge_groundedness
 
             def _eval_review(r):
                 if r.automation == "missing":
                     return
-                verdict = judge_groundedness(case_as_text(by_id[r.id]), ac)
+                verdict = judge_groundedness(case_as_text(by_id[r.id]), enriched_ac)
                 r.groundedness, r.grounded = verdict.score, verdict.passed
                 if not verdict.passed:
                     r.reasons.append(f"Groundedness {verdict.score:.2f} < {settings.groundedness_min}: {verdict.reason[:200]}")
@@ -135,7 +159,12 @@ def run_design_gate(issue_key: str, cases: List[Dict[str, Any]], acceptance_crit
             with ThreadPoolExecutor(max_workers=6) as executor:
                 list(executor.map(_eval_review, reviews))
 
-            coverage = judge_coverage("\n\n".join(case_as_text(c) for c in cases), ac).to_dict()
+            grounded_vals = [r.groundedness for r in reviews if r.groundedness is not None]
+            if grounded_vals:
+                avg_grounded = round(sum(grounded_vals) / len(grounded_vals), 3)
+                store.record_metric(issue_key, "llm_judge_groundedness", avg_grounded, avg_grounded >= settings.groundedness_min)
+
+            coverage = judge_coverage(all_cases_text, ac).to_dict()
         else:
             coverage = None
 
@@ -153,6 +182,8 @@ def run_design_gate(issue_key: str, cases: List[Dict[str, Any]], acceptance_crit
             dropped_case_ids=[r.id for r in reviews if r.automation == "missing"],
             reviews=reviews,
             coverage=coverage,
+            ragas=ragas_dict,
+            promptfoo=promptfoo_dict,
         )
         store.record_metric(issue_key, "test_design_integrity", result.integrity, result.gate_passed,
                             {"passed": passed_count, "total": total, "dropped": result.dropped_case_ids})

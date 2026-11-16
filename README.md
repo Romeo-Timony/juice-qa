@@ -140,6 +140,8 @@
 - Автоматическая запись скринкастов сессий в формате WebM и сохранение скриншотов при падениях.
 
 ### 4. Тесты архитектурного контура QAOps (`tests/qaops/`)
+- `test_deepeval_rag_promptfoo.py` - проверка стека AI-валидации: DeepEval (G-Eval), KnowledgeBaseRAG + 4 метрики Ragas и матрица бенчмарков Promptfoo.
+- `test_sdd_node_and_engine_contracts.py` - контрактная проверка 11 блоков и 66 нод n8n и конечного автомата `PipelineTracker`.
 - `test_openapi_contracts.py` - сверка сгенерированных запросов со схемой OpenAPI SUT.
 - `test_prompt_registry.py` - проверка движка версионирования промптов (Prompt-as-Code).
 - `test_event_store.py` - проверка персистентности событий в SQLite/PostgreSQL.
@@ -179,7 +181,7 @@
 | Язык и среда | Python 3.12 (64-bit), Node.js LTS v24 |
 | Автоматизация тестирования | Pytest 8.x, Playwright 1.45+, Requests, Pydantic v2, Allure-pytest |
 | Оркестрация и интеграция | n8n Cloud / Self-hosted, Jira Cloud REST API & Webhooks, Telegram Bot API |
-| Искусственный интеллект | Google Gemini Flash, DeepEval (G-Eval Groundedness & Coverage), Langfuse Tracing |
+| Искусственный интеллект и RAG | Google Gemini Flash, DeepEval (G-Eval Groundedness & Coverage), KnowledgeBaseRAG + Ragas (Context Precision/Recall/Faithfulness/Answer Relevancy), Promptfoo Benchmark, Langfuse Tracing |
 | Контроль качества кода | Python AST Parser, Ruff Linter (правила E9, F63, F7, F82), Git Worktrees |
 | Тестовая инфраструктура | SQLite3 / PostgreSQL 16 (Event Store), WireMock Standalone (Fault Injection) |
 | Отчетность и телеметрия | Allure Report 2.x, WebM Video Recorder, Release Quality Index (RQI) Analytics |

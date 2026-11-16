@@ -11,7 +11,8 @@
 ```text
 prompts/
 ├── registry.py                 # Программный фасад PromptRegistry
-├── README.md                   # Руководство по версионированию и откатам
+├── promptfooconfig.yaml        # Декларативная конфигурация регрессионного бенчмаркинга Promptfoo
+├── README.md                   # Руководство по версионированию, откатам и оценке качества промптов
 ├── dor_evaluation/             # Домен 1: Оценка Definition of Ready (DoR Gate)
 │   ├── v1.0_baseline.md        # Базовый промпт проверки INVEST
 │   └── v2.0_enterprise.md      # Корпоративный промпт (INVEST + C06 контракты ошибок)
@@ -78,3 +79,21 @@ versions = registry.list_versions("dor_evaluation")
    PROMPT_VERSION_DOR_EVALUATION=v2.1_mycompany
    ```
 4. Пайплайн автоматически подхватит новую версию без рестарта или рефакторинга компонентов.
+
+---
+
+## Регрессионный бенчмаркинг промптов (Promptfoo Integration)
+
+Все 4 домена промптов охвачены автоматизированным регрессионным бенчмаркингом на базе [`prompts/promptfooconfig.yaml`](./promptfooconfig.yaml) и ранера [`qaops/promptfoo_runner.py`](../qaops/promptfoo_runner.py).
+
+- Набор эталонных сценариев (Golden Dataset): включает реальные задачи `JS-40` (Backend API), `JS-41` (Frontend UI), `JS-42` (E2E Flow) и негативные ловушки (размытые ТЗ без контрактов ошибок, тест-кейсы без привязки к требованиям, автотесты с жестким `time.sleep(5)` и без декораторов Qase/Allure).
+- Декларативные ассерты: проверяют валидность JSON-схем ответов (`is-json`), полноту подстановки контекста RAG (`contains-all`) и превосходство корпоративной версии `v2.0_enterprise` над базовой `v1.0_baseline` (`enterprise_delta > 0`).
+- Запуск бенчмарка из Python или CLI:
+  ```python
+  from qaops.promptfoo_runner import run_promptfoo_benchmark
+
+  report = run_promptfoo_benchmark()
+  assert report["passed"] is True
+  assert report["pass_rate"] == 1.0  # 8/8 эталонных сценариев пройдено
+  ```
+- Отчет сохраняется в `logs/promptfoo_benchmark_report.json` и включается в финальный индекс качества релиза (Release Quality Index) и карточку Evidence Pack в Jira.

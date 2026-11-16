@@ -29,6 +29,17 @@ def base_url():
     return os.getenv("JUICE_SHOP_LOCAL_URL", "http://localhost:3000").rstrip("/")
 
 @pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """Автоматический выбор установленного бинарника Chromium в ms-playwright при обновлении пакета."""
+    ms_pw = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\user\AppData\Local")) / "ms-playwright"
+    candidates = sorted(ms_pw.glob("chromium-*/chrome-win64/chrome.exe"), reverse=True)
+    if not candidates:
+        candidates = sorted(ms_pw.glob("chromium_headless_shell-*/chrome-headless-shell-win64/chrome-headless-shell.exe"), reverse=True)
+    if candidates and "executable_path" not in browser_type_launch_args:
+        return {**browser_type_launch_args, "executable_path": str(candidates[0])}
+    return browser_type_launch_args
+
+@pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     """Настройка записи видео (скринкастов) для браузерных контекстов Playwright."""
     return {
